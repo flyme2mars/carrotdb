@@ -6,7 +6,8 @@ before:
     - go mod tidy
 
 builds:
-  - env:
+  - id: carrotdb
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -17,7 +18,8 @@ builds:
       - arm64
     main: ./cmd/carrotdb
     binary: carrotdb
-  - env:
+  - id: carrotdb-server
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
