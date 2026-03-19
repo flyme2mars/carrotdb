@@ -34,4 +34,4 @@ CarrotDB is an educational, highly scalable Key-Value database written in Go. It
 *   **Replication:** Integrate the Raft consensus algorithm to replicate data and elect leader nodes automatically.
 
 ---
-*Status: Phase 3 (Network Layer) completed. Ready to start Phase 4.*
+*Status: Phase 4 (Distributed Replication) completed. CarrotDB v0.4.0 is now a distributed database cluster.*

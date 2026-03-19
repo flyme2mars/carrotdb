@@ -4,72 +4,56 @@ A high-performance, scalable, and educational Key-Value database written in Go.
 
 CarrotDB is designed to be simple to understand but powerful enough to handle massive datasets. It uses a **Log-Structured Storage Engine** (Bitcask-inspired) to ensure extreme write speeds and crash resilience.
 
-## ✨ Features (v0.1.0)
-- **Fast Writes:** Append-only logging ensures data is persisted to disk instantly.
-- **Thread-Safe:** Built with Go's `sync.RWMutex` to handle concurrent operations.
-- **Crash Recovery:** Automatically replays the write-ahead log (WAL) on startup to restore state.
-- **Simple CLI:** Interactive command-line interface for direct data manipulation.
+## ✨ Features (v0.4.0)
+- **Distributed Replication:** Uses the **Raft Consensus Algorithm** to replicate data across multiple nodes.
+- **High Availability:** Automatically elects a new leader if the current one fails.
+- **Fast Writes:** Bitcask storage engine ensures extreme write speeds and disk resilience.
+- **Scalable Index:** Only keys are kept in RAM, allowing for datasets larger than memory.
+- **Crash Recovery:** Replays the write-ahead log (WAL) and Raft logs on startup.
 
 ## 🚀 Quick Start
 
 ### 1. Installation
-
-#### **The Portable Way (Recommended)**
 Download the binary for your operating system from the [Releases](https://github.com/flyme2mars/carrotdb/releases) page.
 
-#### **For Go Developers**
-If you have Go installed, you can install CarrotDB directly:
+### 2. Running a Cluster (Local Test)
+
+**Start Node 1 (Leader):**
 ```bash
-go install github.com/flyme2mars/carrotdb/cmd/carrotdb@latest
+./carrotdb-server --id node1 --addr :6379 --raft :7000
 ```
 
-### 2. Running CarrotDB
-
-First, start the CarrotDB server:
+**Start Node 2 (Follower):**
 ```bash
-./carrotdb-server
+./carrotdb-server --id node2 --addr :6380 --raft :7001 --join localhost:6379
 ```
 
-Then, in a separate terminal, use the CarrotDB CLI client:
+**Start Node 3 (Follower):**
 ```bash
-./carrotdb
-```
-
-Alternatively, you can use standard tools like `telnet` or `nc` to interact with the server:
-```bash
-nc localhost 6379
-SET greeting Hello!
-GET greeting
+./carrotdb-server --id node3 --addr :6381 --raft :7002 --join localhost:6379
 ```
 
 ### 3. Usage
-Once the CarrotDB CLI client is connected, you can use the following commands:
+Connect to the **Leader** (node1) to write data:
 ```bash
-> SET user:1 Alice
-OK
-> GET user:1
-Alice
-> DELETE user:1
-OK
-> EXIT
+./carrotdb
+> SET key value
++OK
 ```
 
-## 🛠 System-Wide Installation (Optional)
-To run `carrotdb` from any directory on your system:
-
-**macOS / Linux:**
+Connect to any **Follower** (node2 or node3) to read data:
 ```bash
-mv carrotdb /usr/local/bin/
+# Connect to :6380
+> GET key
++value
 ```
-
-**Windows:**
-Add the folder containing `carrotdb.exe` to your system's **PATH** environment variable.
 
 ## 🗺 Roadmap
-- [x] **Phase 1:** In-Memory Store + Append-Only Log (Current)
-- [ ] **Phase 2:** Bitcask Storage Engine (Keys in RAM, Values on Disk)
-- [ ] **Phase 3:** TCP Networking & Custom Protocol
-- [ ] **Phase 4:** Distributed Consensus (Raft)
+- [x] **Phase 1:** In-Memory Store + Append-Only Log
+- [x] **Phase 2:** Bitcask Storage Engine
+- [x] **Phase 3:** TCP Networking & Custom Protocol
+- [x] **Phase 4:** Distributed Consensus (Raft)
+- [ ] **Phase 5:** Horizontal Sharding & Consistent Hashing
 
 ## 📄 License
 MIT

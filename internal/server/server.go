@@ -3,24 +3,97 @@ package server
 import (
 	"bufio"
 	"carrotdb/internal/engine"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/hashicorp/raft"
+	raftboltdb "github.com/hashicorp/raft-boltdb"
 )
 
-// Server represents a CarrotDB server.
+// Server represents a CarrotDB server with Raft support.
 type Server struct {
 	addr   string
 	engine *engine.Engine
+	raft   *raft.Raft
 }
 
-// NewServer creates a new instance of the Server.
-func NewServer(addr string, engine *engine.Engine) *Server {
+// NewServer creates a new instance of the Server with Raft initialized.
+func NewServer(addr string, raftAddr string, nodeID string, engine *engine.Engine) (*Server, error) {
+	// Initialize Raft
+	config := raft.DefaultConfig()
+	config.LocalID = raft.ServerID(nodeID)
+
+	// Setup FSM
+	fsm := NewFSM(engine)
+
+	// Setup Raft Storage
+	dataDir := filepath.Join("data", nodeID)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return nil, err
+	}
+
+	logStore, err := raftboltdb.NewBoltStore(filepath.Join(dataDir, "raft-log.db"))
+	if err != nil {
+		return nil, err
+	}
+	stableStore, err := raftboltdb.NewBoltStore(filepath.Join(dataDir, "raft-stable.db"))
+	if err != nil {
+		return nil, err
+	}
+	snapshotStore, err := raft.NewFileSnapshotStore(dataDir, 1, os.Stderr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Setup Transport
+	raftAddrStr := raftAddr
+	if strings.HasPrefix(raftAddrStr, ":") {
+		raftAddrStr = "127.0.0.1" + raftAddrStr
+	}
+	tcpAddr, err := net.ResolveTCPAddr("tcp", raftAddrStr)
+	if err != nil {
+		return nil, err
+	}
+	transport, err := raft.NewTCPTransport(raftAddrStr, tcpAddr, 3, 10*time.Second, os.Stderr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create Raft node
+	r, err := raft.NewRaft(config, fsm, logStore, stableStore, snapshotStore, transport)
+	if err != nil {
+		return nil, err
+	}
+
+	// Bootstrap the cluster (if it's the first node)
+	hasState, err := raft.HasExistingState(logStore, stableStore, snapshotStore)
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasState {
+		configuration := raft.Configuration{
+			Servers: []raft.Server{
+				{
+					ID:      config.LocalID,
+					Address: transport.LocalAddr(),
+				},
+			},
+		}
+		r.BootstrapCluster(configuration)
+	}
+
 	return &Server{
 		addr:   addr,
 		engine: engine,
-	}
+		raft:   r,
+	}, nil
 }
 
 // Start listens for incoming connections and handles them in separate goroutines.
@@ -45,7 +118,7 @@ func (s *Server) Start() error {
 	}
 }
 
-// handleConnection reads commands from a connection and executes them on the engine.
+// handleConnection reads commands from a connection and executes them.
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 	log.Printf("Client connected: %s", conn.RemoteAddr())
@@ -70,9 +143,18 @@ func (s *Server) handleConnection(conn net.Conn) {
 			if len(parts) < 3 {
 				fmt.Fprintln(conn, "-ERROR: Usage: SET <key> <value>")
 			} else {
+				if s.raft.State() != raft.Leader {
+					fmt.Fprintf(conn, "-ERROR: Node is not a Leader. Current state: %s\r\n", s.raft.State())
+					continue
+				}
+
 				key := parts[1]
 				value := strings.Join(parts[2:], " ")
-				if err := s.engine.Put(key, value); err != nil {
+				cmd := Command{Op: "SET", Key: key, Value: value}
+				data, _ := json.Marshal(cmd)
+
+				future := s.raft.Apply(data, 10*time.Second)
+				if err := future.Error(); err != nil {
 					fmt.Fprintf(conn, "-ERROR: %v\r\n", err)
 				} else {
 					fmt.Fprintln(conn, "+OK")
@@ -96,8 +178,35 @@ func (s *Server) handleConnection(conn net.Conn) {
 			if len(parts) < 2 {
 				fmt.Fprintln(conn, "-ERROR: Usage: DELETE <key>")
 			} else {
+				if s.raft.State() != raft.Leader {
+					fmt.Fprintf(conn, "-ERROR: Node is not a Leader. Current state: %s\r\n", s.raft.State())
+					continue
+				}
+
 				key := parts[1]
-				if err := s.engine.Delete(key); err != nil {
+				cmd := Command{Op: "DELETE", Key: key}
+				data, _ := json.Marshal(cmd)
+
+				future := s.raft.Apply(data, 10*time.Second)
+				if err := future.Error(); err != nil {
+					fmt.Fprintf(conn, "-ERROR: %v\r\n", err)
+				} else {
+					fmt.Fprintln(conn, "+OK")
+				}
+			}
+
+		case "JOIN":
+			if len(parts) < 3 {
+				fmt.Fprintln(conn, "-ERROR: Usage: JOIN <node_id> <raft_addr>")
+			} else {
+				if s.raft.State() != raft.Leader {
+					fmt.Fprintf(conn, "-ERROR: Only Leader can accept JOIN. Current state: %s\r\n", s.raft.State())
+					continue
+				}
+				nodeID := parts[1]
+				raftAddr := parts[2]
+				future := s.raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(raftAddr), 0, 0)
+				if err := future.Error(); err != nil {
 					fmt.Fprintf(conn, "-ERROR: %v\r\n", err)
 				} else {
 					fmt.Fprintln(conn, "+OK")
