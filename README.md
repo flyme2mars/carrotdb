@@ -24,13 +24,26 @@ go install github.com/flyme2mars/carrotdb/cmd/carrotdb@latest
 ```
 
 ### 2. Running CarrotDB
-Unzip the downloaded binary and run:
+
+First, start the CarrotDB server:
+```bash
+./carrotdb-server
+```
+
+Then, in a separate terminal, use the CarrotDB CLI client:
 ```bash
 ./carrotdb
 ```
 
+Alternatively, you can use standard tools like `telnet` or `nc` to interact with the server:
+```bash
+nc localhost 6379
+SET greeting Hello!
+GET greeting
+```
+
 ### 3. Usage
-Once the CarrotDB prompt appears, you can use the following commands:
+Once the CarrotDB CLI client is connected, you can use the following commands:
 ```bash
 > SET user:1 Alice
 OK
