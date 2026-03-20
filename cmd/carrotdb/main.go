@@ -11,11 +11,11 @@ import (
 
 func main() {
 	fmt.Println("🥕 CarrotDB CLI Client")
-	fmt.Println("Connecting to localhost:6379...")
+	fmt.Println("Connecting to Carrot-Router (localhost:8000)...")
 
-	conn, err := net.Dial("tcp", "localhost:6379")
+	conn, err := net.Dial("tcp", "localhost:8000")
 	if err != nil {
-		log.Fatalf("failed to connect to server: %v (Is the server running?)", err)
+		log.Fatalf("failed to connect to router: %v (Is the router running?)", err)
 	}
 	defer conn.Close()
 
