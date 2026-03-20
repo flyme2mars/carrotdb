@@ -63,7 +63,6 @@ func (r *Router) handleClient(clientConn net.Conn) {
 			continue
 		}
 
-		command := strings.ToUpper(parts[0])
 		key := parts[1]
 
 		// 1. Find the correct shard for this key
