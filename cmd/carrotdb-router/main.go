@@ -3,25 +3,49 @@ package main
 import (
 	"bufio"
 	"carrotdb/pkg/sharding"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Router struct {
-	addr      string
-	ring      *sharding.HashRing
-	shardPool map[string]string // shardID -> leaderAddress
-	mu        sync.RWMutex
+	addr        string
+	ring        *sharding.HashRing
+	shardPool   map[string]string // shardID -> leaderAddress
+	shardStatus map[string]bool   // shardID -> isAlive
+	mu          sync.RWMutex
 }
 
 func NewRouter(addr string) *Router {
-	return &Router{
-		addr:      addr,
-		ring:      sharding.NewHashRing(40),
-		shardPool: make(map[string]string),
+	r := &Router{
+		addr:        addr,
+		ring:        sharding.NewHashRing(40),
+		shardPool:   make(map[string]string),
+		shardStatus: make(map[string]bool),
+	}
+	go r.startHealthCheck()
+	return r
+}
+
+func (r *Router) startHealthCheck() {
+	for {
+		time.Sleep(5 * time.Second)
+		r.mu.Lock()
+		for id, addr := range r.shardPool {
+			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+			if err != nil {
+				r.shardStatus[id] = false
+			} else {
+				r.shardStatus[id] = true
+				conn.Close()
+			}
+		}
+		r.mu.Unlock()
 	}
 }
 
@@ -30,16 +54,20 @@ func (r *Router) AddShard(id string, leaderAddr string) {
 	defer r.mu.Unlock()
 	r.ring.AddShard(id)
 	r.shardPool[id] = leaderAddr
+	r.shardStatus[id] = true
 }
 
 func (r *Router) Start() error {
+	// Start HTTP API
+	go r.startHTTP(":8080")
+
 	listener, err := net.Listen("tcp", r.addr)
 	if err != nil {
 		return err
 	}
 	defer listener.Close()
 
-	log.Printf("🥕 Carrot-Router listening on %s", r.addr)
+	log.Printf("🥕 Carrot-Router listening on %s (TCP) and :8080 (HTTP)", r.addr)
 
 	for {
 		conn, err := listener.Accept()
@@ -49,6 +77,31 @@ func (r *Router) Start() error {
 		}
 		go r.handleClient(conn)
 	}
+}
+
+func (r *Router) startHTTP(addr string) {
+	http.HandleFunc("/api/status", r.handleStatus)
+	http.Handle("/", http.FileServer(http.Dir("cmd/carrotdb-router/static")))
+	log.Printf("📊 Dashboard API ready at http://localhost%s", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("failed to start HTTP server: %v", err)
+	}
+}
+
+func (r *Router) handleStatus(w http.ResponseWriter, req *http.Request) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	status := struct {
+		Shards map[string]string `json:"shards"`
+		Status map[string]bool   `json:"status"`
+	}{
+		Shards: r.shardPool,
+		Status: r.shardStatus,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
 }
 
 func (r *Router) handleClient(clientConn net.Conn) {

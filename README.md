@@ -4,11 +4,11 @@ A high-performance, scalable, and educational Key-Value database written in Go.
 
 CarrotDB is designed to be simple to understand but powerful enough to handle massive datasets. It uses a **Log-Structured Storage Engine** (Bitcask-inspired) to ensure extreme write speeds and crash resilience.
 
-## ✨ Features (v0.5.0)
+## ✨ Features (v0.6.0)
+- **Web Dashboard:** Real-time visual monitoring of cluster health and shard status.
+- **Health Checks:** Automatic background monitoring of shard availability.
 - **Horizontal Sharding:** Distribute data across multiple clusters (Shards) using **Consistent Hashing**.
 - **Carrot-Router:** A smart proxy that automatically routes requests to the correct shard.
-- **Distributed Replication:** Uses the **Raft Consensus Algorithm** for high availability within shards.
-- **Scalable Index:** Only keys are kept in RAM, allowing for datasets larger than memory.
 
 ## 🚀 Quick Start
 
@@ -17,13 +17,9 @@ Download the binaries from the [Releases](https://github.com/flyme2mars/carrotdb
 
 ### 2. Running a Sharded Cluster (Local Test)
 
-**Start Shard 1 (Node 1):**
+**Start Shards:**
 ```bash
 ./carrotdb-server --id node1 --addr :6379 --raft :7000
-```
-
-**Start Shard 2 (Node 2):**
-```bash
 ./carrotdb-server --id node2 --addr :6380 --raft :7001
 ```
 
@@ -32,7 +28,14 @@ Download the binaries from the [Releases](https://github.com/flyme2mars/carrotdb
 ./carrotdb-router
 ```
 
-### 3. Usage
+### 3. Monitoring (Dashboard)
+Open your browser and navigate to:
+**[http://localhost:8080](http://localhost:8080)**
+
+You will see a real-time list of all shards and their current health status (Online/Offline).
+
+### 4. Usage
+
 Connect your CLI to the **Router** (port 8000):
 ```bash
 ./carrotdb
