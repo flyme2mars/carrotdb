@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -34,6 +35,7 @@ type Engine struct {
 	mu     sync.RWMutex
 	keyDir map[string]location
 	log    *os.File
+	writer *bufio.Writer
 }
 
 // NewEngine creates a new instance of the Engine and restores its state from the log.
@@ -46,6 +48,7 @@ func NewEngine(logPath string) (*Engine, error) {
 	e := &Engine{
 		keyDir: make(map[string]location),
 		log:    file,
+		writer: bufio.NewWriter(file),
 	}
 
 	if err := e.restore(); err != nil {
@@ -132,6 +135,7 @@ func (e *Engine) Put(key, value string) error {
 	valueSize := uint32(len(value))
 
 	// Get current offset for the keyDir
+	// Note: We need to account for buffered data when getting the offset
 	offset, err := e.log.Seek(0, 1)
 	if err != nil {
 		return err
@@ -148,17 +152,21 @@ func (e *Engine) Put(key, value string) error {
 	crc = crc32.Update(crc, crc32.IEEETable, []byte(value))
 	binary.LittleEndian.PutUint32(header[0:4], crc)
 
-	// Write record: header + key + value
-	if _, err := e.log.Write(header); err != nil {
+	// Write record: header + key + value to buffer
+	if _, err := e.writer.Write(header); err != nil {
 		return err
 	}
-	if _, err := e.log.WriteString(key); err != nil {
+	if _, err := e.writer.WriteString(key); err != nil {
 		return err
 	}
-	if _, err := e.log.WriteString(value); err != nil {
+	if _, err := e.writer.WriteString(value); err != nil {
 		return err
 	}
 
+	// Flush buffer to file and sync to disk
+	if err := e.writer.Flush(); err != nil {
+		return err
+	}
 	if err := e.log.Sync(); err != nil {
 		return err
 	}
@@ -220,13 +228,16 @@ func (e *Engine) Delete(key string) error {
 	crc = crc32.Update(crc, crc32.IEEETable, []byte(key))
 	binary.LittleEndian.PutUint32(header[0:4], crc)
 
-	if _, err := e.log.Write(header); err != nil {
+	if _, err := e.writer.Write(header); err != nil {
 		return err
 	}
-	if _, err := e.log.WriteString(key); err != nil {
+	if _, err := e.writer.WriteString(key); err != nil {
 		return err
 	}
 
+	if err := e.writer.Flush(); err != nil {
+		return err
+	}
 	if err := e.log.Sync(); err != nil {
 		return err
 	}
@@ -324,6 +335,7 @@ func (e *Engine) Compact() error {
 	}
 
 	e.log = newLog
+	e.writer = bufio.NewWriter(newLog)
 	e.keyDir = newKeyDir
 
 	return nil
@@ -333,5 +345,6 @@ func (e *Engine) Compact() error {
 func (e *Engine) Close() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.writer.Flush()
 	return e.log.Close()
 }

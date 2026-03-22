@@ -33,5 +33,15 @@ CarrotDB is an educational, highly scalable Key-Value database written in Go. It
 *   **Sharding:** Implement Consistent Hashing to distribute data evenly across multiple CarrotDB nodes.
 *   **Replication:** Integrate the Raft consensus algorithm to replicate data and elect leader nodes automatically.
 
+### Phase 6: Web Dashboard
+*Goal: Provide a visual interface for cluster monitoring.*
+*   **Router API:** Small HTTP server inside the router to expose cluster state.
+*   **Dashboard:** Monochromatic, minimal web UI to see shard health and stats.
+
+### Phase 7: Performance Optimization
+*Goal: Reduce latency and increase throughput.*
+*   **Connection Pooling:** Persistent TCP connections from Router to Shards to avoid handshake overhead.
+*   **Buffered I/O:** Using `bufio.Writer` in the Engine to batch disk writes and reduce syscalls.
+
 ---
-*Status: Phase 6 (Web Dashboard) completed. CarrotDB now includes a real-time cluster monitoring dashboard.*
+*Status: Phase 7 (Performance) completed. CarrotDB is now optimized for high-throughput workloads.*

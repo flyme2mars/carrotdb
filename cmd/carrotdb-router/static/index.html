@@ -3,73 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🥕 CarrotDB Cluster Dashboard</title>
+    <title>CarrotDB Cluster</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f9fafb; color: #111827; padding: 2rem; }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 { color: #f97316; display: flex; align-items: center; gap: 0.5rem; }
-        .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; margin-top: 2rem; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th { text-align: left; border-bottom: 2px solid #f3f4f6; padding: 0.75rem; color: #6b7280; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
-        td { padding: 1rem 0.75rem; border-bottom: 1px solid #f3f4f6; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; }
-        .status-online { background: #dcfce7; color: #166534; }
-        .status-offline { background: #fee2e2; color: #991b1b; }
-        .refresh-text { font-size: 0.875rem; color: #9ca3af; margin-top: 1rem; text-align: right; }
+        :root {
+            --bg: #ffffff;
+            --fg: #000000;
+            --acc: #666666;
+            --border: #eeeeee;
+            --subtle: #f7f7f7;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: -apple-system, Inter, sans-serif; 
+            background: var(--bg); 
+            color: var(--fg); 
+            line-height: 1.2;
+            padding: 3rem;
+        }
+
+        .layout { max-width: 800px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 { font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .version { font-size: 0.75rem; color: var(--acc); font-family: monospace; }
+
+        .stats {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat { display: flex; flex-direction: column; gap: 0.25rem; }
+        .stat-label { font-size: 0.7rem; color: var(--acc); text-transform: uppercase; }
+        .stat-value { font-size: 1rem; font-weight: 500; font-family: monospace; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { 
+            text-align: left; 
+            font-size: 0.7rem; 
+            color: var(--acc); 
+            padding: 0.75rem; 
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+        }
+        td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+
+        code { font-family: monospace; font-size: 0.85rem; color: var(--acc); }
+
+        .status { display: flex; align-items: center; gap: 0.5rem; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; }
+        .online { background: #000; }
+        .offline { background: #ff0000; }
+
+        footer {
+            margin-top: 3rem;
+            font-size: 0.7rem;
+            color: var(--acc);
+            font-family: monospace;
+            display: flex;
+            justify-content: space-between;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🥕 CarrotDB Cluster Dashboard</h1>
-        <div class="card">
-            <h2>Active Shards</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Shard ID</th>
-                        <th>Leader Address</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody id="shard-table">
-                    <tr><td colspan="3">Loading cluster status...</td></tr>
-                </tbody>
-            </table>
+    <div class="layout">
+        <header>
+            <h1>CarrotDB Cluster</h1>
+            <span class="version">v0.6.0</span>
+        </header>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-label">Nodes</span>
+                <span class="stat-value" id="node-count">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Uptime Score</span>
+                <span class="stat-value" id="uptime">0%</span>
+            </div>
         </div>
-        <p class="refresh-text">Auto-refreshing every 5 seconds</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Endpoint</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+
+        <footer>
+            <div id="ts">Updating...</div>
+        </footer>
     </div>
 
     <script>
-        async function updateStatus() {
+        async function refresh() {
             try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-                const tableBody = document.getElementById('shard-table');
-                tableBody.innerHTML = '';
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                const rows = document.getElementById('rows');
+                rows.innerHTML = '';
+
+                let online = 0, total = 0;
 
                 for (const id in data.shards) {
-                    const addr = data.shards[id];
-                    const isAlive = data.status[id];
+                    total++;
+                    if (data.status[id]) online++;
                     
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><strong>${id}</strong></td>
-                        <td><code>${addr}</code></td>
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${id}</td>
+                        <td><code>${data.shards[id]}</code></td>
                         <td>
-                            <span class="status-badge ${isAlive ? 'status-online' : 'status-offline'}">
-                                ${isAlive ? 'Online' : 'Offline'}
-                            </span>
+                            <div class="status">
+                                <div class="dot ${data.status[id] ? 'online' : 'offline'}"></div>
+                                ${data.status[id] ? 'ONLINE' : 'OFFLINE'}
+                            </div>
                         </td>
                     `;
-                    tableBody.appendChild(row);
+                    rows.appendChild(tr);
                 }
-            } catch (error) {
-                console.error('Failed to fetch status:', error);
-            }
-        }
 
-        updateStatus();
-        setInterval(updateStatus, 5000);
+                document.getElementById('node-count').textContent = total;
+                document.getElementById('uptime').textContent = `${total ? Math.round((online/total)*100) : 0}%`;
+                document.getElementById('ts').textContent = `SYNC: ${new Date().toISOString()}`;
+            } catch (e) { console.error(e); }
+        }
+        refresh();
+        setInterval(refresh, 5000);
     </script>
 </body>
 </html>

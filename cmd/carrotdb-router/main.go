@@ -18,6 +18,7 @@ type Router struct {
 	ring        *sharding.HashRing
 	shardPool   map[string]string // shardID -> leaderAddress
 	shardStatus map[string]bool   // shardID -> isAlive
+	conns       map[string]net.Conn // addr -> persistent connection
 	mu          sync.RWMutex
 }
 
@@ -27,6 +28,7 @@ func NewRouter(addr string) *Router {
 		ring:        sharding.NewHashRing(40),
 		shardPool:   make(map[string]string),
 		shardStatus: make(map[string]bool),
+		conns:       make(map[string]net.Conn),
 	}
 	go r.startHealthCheck()
 	return r
@@ -139,17 +141,57 @@ func (r *Router) handleClient(clientConn net.Conn) {
 	}
 }
 
+func (r *Router) getShardConn(addr string) (net.Conn, error) {
+	r.mu.RLock()
+	conn, ok := r.conns[addr]
+	r.mu.RUnlock()
+
+	if ok {
+		return conn, nil
+	}
+
+	// Create new connection if none exists
+	newConn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	r.mu.Lock()
+	r.conns[addr] = newConn
+	r.mu.Unlock()
+
+	return newConn, nil
+}
+
 func (r *Router) forwardToShard(addr string, command string) (string, error) {
-	// In a production system, we would use a connection pool here
-	conn, err := net.Dial("tcp", addr)
+	conn, err := r.getShardConn(addr)
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
 
+	// Try to send command
 	fmt.Fprintln(conn, command)
 	reader := bufio.NewReader(conn)
-	return reader.ReadString('\n')
+	resp, err := reader.ReadString('\n')
+
+	if err != nil {
+		// Connection might be dead, try to reconnect once
+		log.Printf("Connection to %s lost, retrying...", addr)
+		conn.Close()
+		
+		r.mu.Lock()
+		delete(r.conns, addr)
+		r.mu.Unlock()
+
+		newConn, err := r.getShardConn(addr)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintln(newConn, command)
+		return bufio.NewReader(newConn).ReadString('\n')
+	}
+
+	return resp, nil
 }
 
 func main() {
