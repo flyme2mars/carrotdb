@@ -56,9 +56,11 @@ func NewRouter(addr string, gossipAddr string, gossipSeed string) *Router {
 	r.gossip = m
 
 	if gossipSeed != "" {
-		_, err := m.Join([]string{gossipSeed})
+		n, err := m.Join([]string{gossipSeed})
 		if err != nil {
 			log.Printf("failed to join gossip cluster: %v", err)
+		} else {
+			log.Printf("Successfully joined gossip cluster (discovered %d nodes)", n)
 		}
 	}
 
@@ -71,16 +73,28 @@ type eventDelegate struct {
 }
 
 func (e *eventDelegate) NotifyJoin(node *memberlist.Node) {
-	var meta server.NodeMetadata
-	if err := json.Unmarshal(node.Meta, &meta); err != nil {
+	if len(node.Meta) == 0 {
 		return
 	}
+
+	var meta server.NodeMetadata
+	if err := json.Unmarshal(node.Meta, &meta); err != nil {
+		log.Printf("Gossip: Failed to unmarshal metadata from %s: %v", node.Name, err)
+		return
+	}
+	
 	if meta.ShardID == "" {
 		return
 	}
 
-	log.Printf("Gossip: Node %s joined Shard %s at %s", node.Name, meta.ShardID, meta.APIAddr)
-	e.router.addNode(meta.ShardID, meta.APIAddr)
+	// Normalize API address
+	apiAddr := meta.APIAddr
+	if strings.HasPrefix(apiAddr, ":") {
+		apiAddr = "127.0.0.1" + apiAddr
+	}
+
+	log.Printf("Gossip: Discovered Node %s (Shard: %s, API: %s)", node.Name, meta.ShardID, apiAddr)
+	e.router.addNode(meta.ShardID, apiAddr)
 }
 
 func (e *eventDelegate) NotifyLeave(node *memberlist.Node) {
@@ -293,6 +307,10 @@ func (r *Router) handleClient(clientConn net.Conn) {
 
 		key := parts[1]
 		shardID := r.ring.GetShard(key)
+		if shardID == "" {
+			fmt.Fprintf(clientConn, "-ERROR: no shards discovered yet. Check if servers are running and gossip-seed is correct.\r\n")
+			continue
+		}
 
 		response, err := r.forwardToShard(shardID, input)
 		if err != nil {

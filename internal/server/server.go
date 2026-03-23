@@ -107,16 +107,30 @@ func NewServer(addr string, raftAddr string, nodeID string, shardID string, engi
 	// Initialize Gossip (Memberlist)
 	mConfig := memberlist.DefaultLocalConfig()
 	mConfig.Name = nodeID
+	
+	// Normalize addresses for metadata
+	fullAPIAddr := addr
+	if strings.HasPrefix(fullAPIAddr, ":") {
+		fullAPIAddr = "127.0.0.1" + fullAPIAddr
+	}
+	fullRaftAddr := raftAddr
+	if strings.HasPrefix(fullRaftAddr, ":") {
+		fullRaftAddr = "127.0.0.1" + fullRaftAddr
+	}
+
 	if gossipAddr != "" {
 		host, portStr, _ := net.SplitHostPort(gossipAddr)
+		if host == "" {
+			host = "127.0.0.1"
+		}
 		mConfig.BindAddr = host
 		mConfig.BindPort, _ = strconv.Atoi(portStr)
 	}
 
 	meta := NodeMetadata{
 		ShardID:  shardID,
-		APIAddr:  addr,
-		RaftAddr: raftAddr,
+		APIAddr:  fullAPIAddr,
+		RaftAddr: fullRaftAddr,
 	}
 	mConfig.Delegate = &gossipDelegate{meta: meta}
 
