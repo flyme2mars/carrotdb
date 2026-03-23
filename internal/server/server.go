@@ -6,6 +6,7 @@ import (
 	"carrotdb/pkg/sharding"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
