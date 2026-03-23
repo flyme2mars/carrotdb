@@ -48,5 +48,11 @@ CarrotDB is an educational, highly scalable Key-Value database written in Go. It
 *   **Leader Probing:** Router queries nodes using the `ROLE` command to find the current leader.
 *   **Automatic Failover:** If a leader fails, the Router automatically discovers the new leader without client-side errors.
 
+### Phase 9: Auto-Discovery & Dynamic Rebalancing
+*Goal: Remove hardcoded config and enable horizontal growth.*
+*   **Gossip (Memberlist):** Nodes automatically discover each other via a gossip protocol.
+*   **Dynamic Routing:** The Router automatically updates the Hash Ring when nodes join or leave.
+*   **Automatic Rebalancing:** Servers detect shard changes and automatically migrate data to the new owners.
+
 ---
-*Status: Phase 8 (Discovery) completed. CarrotDB is now a resilient, self-healing distributed cluster.*
+*Status: Phase 9 (Gossip) completed. CarrotDB is now a zero-config, self-healing distributed database.*

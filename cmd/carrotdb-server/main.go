@@ -15,14 +15,17 @@ import (
 
 func main() {
 	var (
-		nodeID   = flag.String("id", "node1", "Node ID")
-		httpAddr = flag.String("addr", ":6379", "Client API address")
-		raftAddr = flag.String("raft", ":7000", "Raft internal address")
-		joinAddr = flag.String("join", "", "Address of the leader to join")
+		nodeID     = flag.String("id", "node1", "Node ID")
+		shardID    = flag.String("shard", "shard1", "Shard ID")
+		httpAddr   = flag.String("addr", ":6379", "Client API address")
+		raftAddr   = flag.String("raft", ":7000", "Raft internal address")
+		joinAddr   = flag.String("join", "", "Address of the leader to join (Raft)")
+		gossipAddr = flag.String("gossip-addr", ":9000", "Gossip bind address")
+		gossipSeed = flag.String("gossip-seed", "", "Gossip seed address")
 	)
 	flag.Parse()
 
-	log.Printf("🥕 CarrotDB starting (Node: %s, API: %s, Raft: %s)", *nodeID, *httpAddr, *raftAddr)
+	log.Printf("🥕 CarrotDB starting (Node: %s, Shard: %s, API: %s, Raft: %s, Gossip: %s)", *nodeID, *shardID, *httpAddr, *raftAddr, *gossipAddr)
 
 	// Ensure the data directory exists for this node
 	dataDir := filepath.Join("data", *nodeID)
@@ -37,8 +40,8 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize and start the Server with Raft
-	s, err := server.NewServer(*httpAddr, *raftAddr, *nodeID, db)
+	// Initialize and start the Server with Raft and Gossip
+	s, err := server.NewServer(*httpAddr, *raftAddr, *nodeID, *shardID, db, *gossipAddr, *gossipSeed)
 	if err != nil {
 		log.Fatalf("failed to initialize server: %v", err)
 	}

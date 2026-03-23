@@ -47,13 +47,5 @@ Connect your CLI to the **Router** (port 8000):
 ```
 The Router will automatically store `key1` on Shard 1 and `key2` on Shard 2!
 
-## 🗺 Roadmap
-- [x] **Phase 1:** In-Memory Store + Append-Only Log
-- [x] **Phase 2:** Bitcask Storage Engine
-- [x] **Phase 3:** TCP Networking & Custom Protocol
-- [x] **Phase 4:** Distributed Consensus (Raft)
-- [x] **Phase 5:** Horizontal Sharding & Consistent Hashing
-- [ ] **Phase 6:** Dynamic Rebalancing & Auto-Discovery
-
 ## 📄 License
 MIT

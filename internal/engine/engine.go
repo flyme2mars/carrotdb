@@ -341,6 +341,18 @@ func (e *Engine) Compact() error {
 	return nil
 }
 
+// Keys returns a list of all keys currently in the engine.
+func (e *Engine) Keys() []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	keys := make([]string, 0, len(e.keyDir))
+	for k := range e.keyDir {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // Close closes the engine's log file safely.
 func (e *Engine) Close() error {
 	e.mu.Lock()

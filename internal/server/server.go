@@ -3,28 +3,43 @@ package server
 import (
 	"bufio"
 	"carrotdb/internal/engine"
+	"carrotdb/pkg/sharding"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 )
 
-// Server represents a CarrotDB server with Raft support.
-type Server struct {
-	addr   string
-	engine *engine.Engine
-	raft   *raft.Raft
+// NodeMetadata represents the information broadcast via Gossip.
+type NodeMetadata struct {
+	ShardID  string `json:"shard_id"`
+	APIAddr  string `json:"api_addr"`
+	RaftAddr string `json:"raft_addr"`
 }
 
-// NewServer creates a new instance of the Server with Raft initialized.
-func NewServer(addr string, raftAddr string, nodeID string, engine *engine.Engine) (*Server, error) {
+// Server represents a CarrotDB server with Raft and Gossip support.
+type Server struct {
+	addr    string
+	shardID string
+	engine  *engine.Engine
+	raft    *raft.Raft
+	gossip  *memberlist.Memberlist
+	ring    *sharding.HashRing
+	mu      sync.RWMutex
+}
+
+// NewServer creates a new instance of the Server with Raft and Gossip initialized.
+func NewServer(addr string, raftAddr string, nodeID string, shardID string, engine *engine.Engine, gossipAddr string, gossipSeed string) (*Server, error) {
 	// Initialize Raft
 	config := raft.DefaultConfig()
 	config.LocalID = raft.ServerID(nodeID)
@@ -89,12 +104,146 @@ func NewServer(addr string, raftAddr string, nodeID string, engine *engine.Engin
 		r.BootstrapCluster(configuration)
 	}
 
-	return &Server{
-		addr:   addr,
-		engine: engine,
-		raft:   r,
-	}, nil
+	// Initialize Gossip (Memberlist)
+	mConfig := memberlist.DefaultLocalConfig()
+	mConfig.Name = nodeID
+	if gossipAddr != "" {
+		host, portStr, _ := net.SplitHostPort(gossipAddr)
+		mConfig.BindAddr = host
+		mConfig.BindPort, _ = strconv.Atoi(portStr)
+	}
+
+	meta := NodeMetadata{
+		ShardID:  shardID,
+		APIAddr:  addr,
+		RaftAddr: raftAddr,
+	}
+	mConfig.Delegate = &gossipDelegate{meta: meta}
+
+	m, err := memberlist.Create(mConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create memberlist: %w", err)
+	}
+
+	if gossipSeed != "" {
+		_, err := m.Join([]string{gossipSeed})
+		if err != nil {
+			log.Printf("failed to join gossip cluster: %v", err)
+		}
+	}
+
+	s := &Server{
+		addr:    addr,
+		shardID: shardID,
+		engine:  engine,
+		raft:    r,
+		gossip:  m,
+		ring:    sharding.NewHashRing(40),
+	}
+
+	go s.monitorRing()
+
+	return s, nil
 }
+
+func (s *Server) monitorRing() {
+	for {
+		time.Sleep(10 * time.Second)
+		s.updateRing()
+		if s.raft.State() == raft.Leader {
+			s.rebalance()
+		}
+	}
+}
+
+func (s *Server) rebalance() {
+	s.mu.RLock()
+	ring := s.ring
+	s.mu.RUnlock()
+
+	keys := s.engine.Keys()
+	for _, key := range keys {
+		targetShard := ring.GetShard(key)
+		if targetShard != "" && targetShard != s.shardID {
+			log.Printf("Rebalance: Key %s belongs to %s (current: %s). Migrating...", key, targetShard, s.shardID)
+			s.migrateKey(key, targetShard)
+		}
+	}
+}
+
+func (s *Server) migrateKey(key string, targetShard string) {
+	// 1. Get value
+	val, err := s.engine.Get(key)
+	if err != nil {
+		return
+	}
+
+	// 2. Find target leader (via Gossip)
+	var targetAddr string
+	for _, member := range s.gossip.Members() {
+		var meta NodeMetadata
+		json.Unmarshal(member.Meta, &meta)
+		if meta.ShardID == targetShard {
+			targetAddr = meta.APIAddr
+			break
+		}
+	}
+
+	if targetAddr == "" {
+		return
+	}
+
+	// 3. Send to target
+	conn, err := net.DialTimeout("tcp", targetAddr, 2*time.Second)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	fmt.Fprintf(conn, "SET %s %s\n", key, val)
+	resp, _ := bufio.NewReader(conn).ReadString('\n')
+
+	if strings.Contains(resp, "+OK") {
+		// 4. Delete locally via Raft
+		cmd := Command{Op: "DELETE", Key: key}
+		data, _ := json.Marshal(cmd)
+		s.raft.Apply(data, 5*time.Second)
+	}
+}
+
+func (s *Server) updateRing() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	newRing := sharding.NewHashRing(40)
+	shards := make(map[string]bool)
+
+	for _, member := range s.gossip.Members() {
+		var meta NodeMetadata
+		if err := json.Unmarshal(member.Meta, &meta); err != nil {
+			continue
+		}
+		if meta.ShardID != "" && !shards[meta.ShardID] {
+			newRing.AddShard(meta.ShardID)
+			shards[meta.ShardID] = true
+		}
+	}
+	s.ring = newRing
+}
+
+type gossipDelegate struct {
+	meta NodeMetadata
+}
+
+func (d *gossipDelegate) NodeMeta(limit int) []byte {
+	data, _ := json.Marshal(d.meta)
+	return data
+}
+
+func (d *gossipDelegate) NotifyMsg([]byte)                           {}
+func (d *gossipDelegate) GetBroadcasts(overhead, limit int) [][]byte { return nil }
+func (d *gossipDelegate) LocalState(join bool) []byte                { return nil }
+func (d *gossipDelegate) MergeRemoteState(buf []byte, join bool)     {}
 
 // Start listens for incoming connections and handles them in separate goroutines.
 func (s *Server) Start() error {

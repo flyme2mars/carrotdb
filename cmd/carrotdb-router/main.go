@@ -2,15 +2,20 @@ package main
 
 import (
 	"bufio"
+	"carrotdb/internal/server"
 	"carrotdb/pkg/sharding"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/memberlist"
 )
 
 type Router struct {
@@ -21,9 +26,10 @@ type Router struct {
 	shardStatus map[string]bool     // shardID -> isAlive (at least one node)
 	conns       map[string]net.Conn // addr -> persistent connection
 	mu          sync.RWMutex
+	gossip      *memberlist.Memberlist
 }
 
-func NewRouter(addr string) *Router {
+func NewRouter(addr string, gossipAddr string, gossipSeed string) *Router {
 	r := &Router{
 		addr:        addr,
 		ring:        sharding.NewHashRing(40),
@@ -32,8 +38,83 @@ func NewRouter(addr string) *Router {
 		shardStatus: make(map[string]bool),
 		conns:       make(map[string]net.Conn),
 	}
+
+	// Initialize Gossip
+	mConfig := memberlist.DefaultLocalConfig()
+	mConfig.Name = "router-" + strconv.FormatInt(time.Now().Unix(), 10)
+	if gossipAddr != "" {
+		host, portStr, _ := net.SplitHostPort(gossipAddr)
+		mConfig.BindAddr = host
+		mConfig.BindPort, _ = strconv.Atoi(portStr)
+	}
+	mConfig.Events = &eventDelegate{router: r}
+
+	m, err := memberlist.Create(mConfig)
+	if err != nil {
+		log.Fatalf("failed to create memberlist: %v", err)
+	}
+	r.gossip = m
+
+	if gossipSeed != "" {
+		_, err := m.Join([]string{gossipSeed})
+		if err != nil {
+			log.Printf("failed to join gossip cluster: %v", err)
+		}
+	}
+
 	go r.startHealthCheck()
 	return r
+}
+
+type eventDelegate struct {
+	router *Router
+}
+
+func (e *eventDelegate) NotifyJoin(node *memberlist.Node) {
+	var meta server.NodeMetadata
+	if err := json.Unmarshal(node.Meta, &meta); err != nil {
+		return
+	}
+	if meta.ShardID == "" {
+		return
+	}
+
+	log.Printf("Gossip: Node %s joined Shard %s at %s", node.Name, meta.ShardID, meta.APIAddr)
+	e.router.addNode(meta.ShardID, meta.APIAddr)
+}
+
+func (e *eventDelegate) NotifyLeave(node *memberlist.Node) {
+	var meta server.NodeMetadata
+	if err := json.Unmarshal(node.Meta, &meta); err != nil {
+		return
+	}
+	log.Printf("Gossip: Node %s left", node.Name)
+	// In a real system, we would remove the node from the shardPool
+}
+
+func (e *eventDelegate) NotifyUpdate(node *memberlist.Node) {}
+
+func (r *Router) addNode(shardID string, addr string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	nodes, exists := r.shardPool[shardID]
+	if !exists {
+		r.ring.AddShard(shardID)
+		r.shardStatus[shardID] = true
+	}
+
+	// Check if already in pool
+	for _, n := range nodes {
+		if n == addr {
+			return
+		}
+	}
+
+	r.shardPool[shardID] = append(nodes, addr)
+	if r.lastLeader[shardID] == "" {
+		r.lastLeader[shardID] = addr
+	}
 }
 
 func (r *Router) startHealthCheck() {
@@ -223,14 +304,16 @@ func (r *Router) handleClient(clientConn net.Conn) {
 }
 
 func main() {
-	router := NewRouter(":8000")
+	var (
+		apiAddr    = flag.String("addr", ":8000", "Router client API address")
+		gossipAddr = flag.String("gossip-addr", ":9001", "Gossip bind address")
+		gossipSeed = flag.String("gossip-seed", "", "Gossip seed address")
+	)
+	flag.Parse()
 
-	// Intelligent Shard Configuration:
-	// We tell the router about ALL nodes in each shard cluster.
-	router.AddShard("shard1", []string{"localhost:6379", "localhost:6380", "localhost:6381"})
-	router.AddShard("shard2", []string{"localhost:6382", "localhost:6383", "localhost:6384"})
+	router := NewRouter(*apiAddr, *gossipAddr, *gossipSeed)
 
-	log.Println("Starting Smart CarrotDB Router...")
+	log.Printf("Starting CarrotDB Router (Gossip: %s)...", *gossipAddr)
 	if err := router.Start(); err != nil {
 		log.Fatal(err)
 	}
