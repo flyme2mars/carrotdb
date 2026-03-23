@@ -213,6 +213,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 				}
 			}
 
+		case "ROLE":
+			fmt.Fprintf(conn, "+%s\r\n", s.raft.State())
+
 		case "COMPACT":
 			if err := s.engine.Compact(); err != nil {
 				fmt.Fprintf(conn, "-ERROR: %v\r\n", err)

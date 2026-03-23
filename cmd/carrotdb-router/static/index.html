@@ -123,10 +123,11 @@
                     total++;
                     if (data.status[id]) online++;
                     
+                    const nodes = data.shards[id].join(', ');
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${id}</td>
-                        <td><code>${data.shards[id]}</code></td>
+                        <td><code>${nodes}</code></td>
                         <td>
                             <div class="status">
                                 <div class="dot ${data.status[id] ? 'online' : 'offline'}"></div>

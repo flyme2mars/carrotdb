@@ -43,5 +43,10 @@ CarrotDB is an educational, highly scalable Key-Value database written in Go. It
 *   **Connection Pooling:** Persistent TCP connections from Router to Shards to avoid handshake overhead.
 *   **Buffered I/O:** Using `bufio.Writer` in the Engine to batch disk writes and reduce syscalls.
 
+### Phase 8: Smart Leader Discovery
+*Goal: Automatically handle Raft leader changes.*
+*   **Leader Probing:** Router queries nodes using the `ROLE` command to find the current leader.
+*   **Automatic Failover:** If a leader fails, the Router automatically discovers the new leader without client-side errors.
+
 ---
-*Status: Phase 7 (Performance) completed. CarrotDB is now optimized for high-throughput workloads.*
+*Status: Phase 8 (Discovery) completed. CarrotDB is now a resilient, self-healing distributed cluster.*

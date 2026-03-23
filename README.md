@@ -4,8 +4,9 @@ A high-performance, scalable, and educational Key-Value database written in Go.
 
 CarrotDB is designed to be simple to understand but powerful enough to handle massive datasets. It uses a **Log-Structured Storage Engine** (Bitcask-inspired) to ensure extreme write speeds and crash resilience.
 
-## ✨ Features (v0.7.0)
-- **High Performance:** Persistent **Connection Pooling** in the Router and **Buffered Writes** in the Engine for maximum throughput.
+## ✨ Features (v0.8.0)
+- **Smart Leader Discovery:** The Router automatically finds the cluster Leader for every shard. No more "Not a Leader" errors!
+- **High Performance:** Persistent **Connection Pooling** and **Buffered Writes** for maximum throughput.
 - **Web Dashboard:** Monochromatic, minimal visual monitoring of cluster health.
 - **Horizontal Sharding:** Distribute data across multiple clusters using **Consistent Hashing**.
 - **Distributed Replication:** Uses the **Raft Consensus Algorithm** for high availability.
