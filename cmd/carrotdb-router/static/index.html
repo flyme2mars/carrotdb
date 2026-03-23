@@ -19,17 +19,17 @@
             font-family: -apple-system, Inter, sans-serif; 
             background: var(--bg); 
             color: var(--fg); 
-            line-height: 1.2;
+            line-height: 1.4;
             padding: 3rem;
         }
 
-        .layout { max-width: 800px; margin: 0 auto; }
+        .layout { max-width: 1000px; margin: 0 auto; }
 
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
+            margin-bottom: 3rem;
             padding-bottom: 1rem;
             border-bottom: 1px solid var(--border);
         }
@@ -39,26 +39,56 @@
 
         .stats {
             display: flex;
-            gap: 2rem;
-            margin-bottom: 2rem;
+            gap: 3rem;
+            margin-bottom: 3rem;
         }
 
         .stat { display: flex; flex-direction: column; gap: 0.25rem; }
-        .stat-label { font-size: 0.7rem; color: var(--acc); text-transform: uppercase; }
-        .stat-value { font-size: 1rem; font-weight: 500; font-family: monospace; }
+        .stat-label { font-size: 0.7rem; color: var(--acc); text-transform: uppercase; letter-spacing: 0.02em; }
+        .stat-value { font-size: 1.25rem; font-weight: 500; font-family: monospace; }
 
-        table { width: 100%; border-collapse: collapse; }
-        th { 
-            text-align: left; 
-            font-size: 0.7rem; 
-            color: var(--acc); 
-            padding: 0.75rem; 
-            border-bottom: 1px solid var(--border);
-            text-transform: uppercase;
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
         }
-        td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
 
-        code { font-family: monospace; font-size: 0.85rem; color: var(--acc); }
+        .shard-card {
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            border-radius: 4px;
+        }
+
+        .shard-id {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .node-list { display: flex; flex-direction: column; gap: 1rem; }
+
+        .node-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+
+        .node-info { display: flex; flex-direction: column; gap: 0.2rem; }
+        .node-addr { font-family: monospace; color: var(--acc); }
+        .node-role { 
+            font-size: 0.65rem; 
+            font-weight: 700; 
+            text-transform: uppercase;
+            padding: 0.1rem 0.4rem;
+            background: var(--subtle);
+            border-radius: 2px;
+            width: fit-content;
+        }
 
         .status { display: flex; align-items: center; gap: 0.5rem; }
         .dot { width: 6px; height: 6px; border-radius: 50%; }
@@ -66,12 +96,12 @@
         .offline { background: #ff0000; }
 
         footer {
-            margin-top: 3rem;
+            margin-top: 4rem;
             font-size: 0.7rem;
             color: var(--acc);
             font-family: monospace;
-            display: flex;
-            justify-content: space-between;
+            border-top: 1px solid var(--border);
+            padding-top: 1rem;
         }
     </style>
 </head>
@@ -79,33 +109,28 @@
     <div class="layout">
         <header>
             <h1>CarrotDB Cluster</h1>
-            <span class="version">v0.6.0</span>
+            <span class="version">v0.9.1</span>
         </header>
 
         <div class="stats">
             <div class="stat">
-                <span class="stat-label">Nodes</span>
+                <span class="stat-label">Active Shards</span>
+                <span class="stat-value" id="shard-count">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Total Nodes</span>
                 <span class="stat-value" id="node-count">0</span>
             </div>
             <div class="stat">
-                <span class="stat-label">Uptime Score</span>
+                <span class="stat-label">System Uptime</span>
                 <span class="stat-value" id="uptime">0%</span>
             </div>
         </div>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Endpoint</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="rows"></tbody>
-        </table>
+        <div class="grid" id="cluster-grid"></div>
 
         <footer>
-            <div id="ts">Updating...</div>
+            <div id="ts">SYNCING...</div>
         </footer>
     </div>
 
@@ -114,33 +139,54 @@
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
-                const rows = document.getElementById('rows');
-                rows.innerHTML = '';
+                const grid = document.getElementById('cluster-grid');
+                grid.innerHTML = '';
 
-                let online = 0, total = 0;
+                let nodeCount = 0;
+                let onlineNodes = 0;
+                let shardIds = Object.keys(data.shards);
 
-                for (const id in data.shards) {
-                    total++;
-                    if (data.status[id]) online++;
+                shardIds.forEach(shardId => {
+                    const nodes = data.shards[shardId];
+                    const isShardAlive = data.status[shardId];
                     
-                    const nodes = data.shards[id].join(', ');
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${id}</td>
-                        <td><code>${nodes}</code></td>
-                        <td>
-                            <div class="status">
-                                <div class="dot ${data.status[id] ? 'online' : 'offline'}"></div>
-                                ${data.status[id] ? 'ONLINE' : 'OFFLINE'}
-                            </div>
-                        </td>
-                    `;
-                    rows.appendChild(tr);
-                }
+                    const card = document.createElement('div');
+                    card.className = 'shard-card';
+                    
+                    let nodeHtml = '';
+                    nodes.forEach(addr => {
+                        nodeCount++;
+                        // For now, we assume if shard is alive, node is alive. 
+                        // In v1.0 we will probe individual node roles.
+                        onlineNodes += isShardAlive ? 1 : 0;
 
-                document.getElementById('node-count').textContent = total;
-                document.getElementById('uptime').textContent = `${total ? Math.round((online/total)*100) : 0}%`;
-                document.getElementById('ts').textContent = `SYNC: ${new Date().toISOString()}`;
+                        nodeHtml += `
+                            <div class="node-item">
+                                <div class="node-info">
+                                    <span class="node-addr">${addr}</span>
+                                    <span class="node-role">${isShardAlive ? 'Member' : 'Disconnected'}</span>
+                                </div>
+                                <div class="status">
+                                    <div class="dot ${isShardAlive ? 'online' : 'offline'}"></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    card.innerHTML = `
+                        <div class="shard-id">
+                            <span>${shardId}</span>
+                            <span style="font-weight: 400; color: var(--acc); font-size: 0.7rem;">${nodes.length} Nodes</span>
+                        </div>
+                        <div class="node-list">${nodeHtml}</div>
+                    `;
+                    grid.appendChild(card);
+                });
+
+                document.getElementById('shard-count').textContent = shardIds.length;
+                document.getElementById('node-count').textContent = nodeCount;
+                document.getElementById('uptime').textContent = `${nodeCount ? Math.round((onlineNodes/nodeCount)*100) : 0}%`;
+                document.getElementById('ts').textContent = `LAST_SYNC: ${new Date().toISOString()}`;
             } catch (e) { console.error(e); }
         }
         refresh();

@@ -55,4 +55,4 @@ CarrotDB is an educational, highly scalable Key-Value database written in Go. It
 *   **Automatic Rebalancing:** Servers detect shard changes and automatically migrate data to the new owners.
 
 ---
-*Status: Phase 9 (Gossip) completed. CarrotDB is now a zero-config, self-healing distributed database.*
+*Status: Phase 10 (Advanced Discovery) completed. CarrotDB v0.10.0 is now a fully observable distributed cluster.*
