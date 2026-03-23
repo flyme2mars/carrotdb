@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -42,9 +43,14 @@ func NewRouter(addr string, gossipAddr string, gossipSeed string) *Router {
 	// Initialize Gossip
 	mConfig := memberlist.DefaultLocalConfig()
 	mConfig.Name = "router-" + strconv.FormatInt(time.Now().Unix(), 10)
+	
+	// SILENCE SLOP
+	mConfig.LogOutput = io.Discard
+
+	// Force IPv4
+	mConfig.BindAddr = "127.0.0.1"
 	if gossipAddr != "" {
-		host, portStr, _ := net.SplitHostPort(gossipAddr)
-		mConfig.BindAddr = host
+		_, portStr, _ := net.SplitHostPort(gossipAddr)
 		mConfig.BindPort, _ = strconv.Atoi(portStr)
 	}
 	mConfig.Events = &eventDelegate{router: r}

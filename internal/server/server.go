@@ -108,6 +108,9 @@ func NewServer(addr string, raftAddr string, nodeID string, shardID string, engi
 	mConfig := memberlist.DefaultLocalConfig()
 	mConfig.Name = nodeID
 	
+	// SILENCE SLOP: Only log errors, not every ping/pong
+	mConfig.LogOutput = io.Discard 
+	
 	// Normalize addresses for metadata
 	fullAPIAddr := addr
 	if strings.HasPrefix(fullAPIAddr, ":") {
@@ -118,12 +121,10 @@ func NewServer(addr string, raftAddr string, nodeID string, shardID string, engi
 		fullRaftAddr = "127.0.0.1" + fullRaftAddr
 	}
 
+	// Force IPv4 to avoid [::] vs 127.0.0.1 conflicts
+	mConfig.BindAddr = "127.0.0.1"
 	if gossipAddr != "" {
-		host, portStr, _ := net.SplitHostPort(gossipAddr)
-		if host == "" {
-			host = "127.0.0.1"
-		}
-		mConfig.BindAddr = host
+		_, portStr, _ := net.SplitHostPort(gossipAddr)
 		mConfig.BindPort, _ = strconv.Atoi(portStr)
 	}
 
