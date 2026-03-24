@@ -381,6 +381,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 		case "ROLE":
 			fmt.Fprintf(conn, "+%s\r\n", s.raft.State())
 
+		case "KEYS":
+			prefix := ""
+			if len(parts) >= 2 {
+				prefix = parts[1]
+			}
+			keys := s.engine.KeysWithPrefix(prefix)
+			fmt.Fprintf(conn, "+%s\r\n", strings.Join(keys, " "))
+
 		case "COMPACT":
 			if err := s.engine.Compact(); err != nil {
 				fmt.Fprintf(conn, "-ERROR: %v\r\n", err)

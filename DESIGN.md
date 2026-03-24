@@ -54,5 +54,11 @@ CarrotDB is an educational, highly scalable Key-Value database written in Go. It
 *   **Dynamic Routing:** The Router automatically updates the Hash Ring when nodes join or leave.
 *   **Automatic Rebalancing:** Servers detect shard changes and automatically migrate data to the new owners.
 
+### Phase 10: Python SDK & Namespacing
+*Goal: Multi-database support and cross-language usability.*
+*   **Logical Namespacing:** SDK automatically prefixes keys with a database name to provide isolation.
+*   **Python SDK:** A native Python library for easy integration into web apps.
+*   **Prefix Searching:** Added `KEYS` command to the server protocol for namespace management.
+
 ---
-*Status: Phase 10 (Advanced Discovery) completed. CarrotDB v0.10.0 is now a fully observable distributed cluster.*
+*Status: Phase 10 (SDK) completed. CarrotDB is now a multi-tenant distributed database cluster.*

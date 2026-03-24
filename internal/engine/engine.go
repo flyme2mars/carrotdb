@@ -343,12 +343,19 @@ func (e *Engine) Compact() error {
 
 // Keys returns a list of all keys currently in the engine.
 func (e *Engine) Keys() []string {
+	return e.KeysWithPrefix("")
+}
+
+// KeysWithPrefix returns a list of all keys that start with the given prefix.
+func (e *Engine) KeysWithPrefix(prefix string) []string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	keys := make([]string, 0, len(e.keyDir))
+	keys := make([]string, 0)
 	for k := range e.keyDir {
-		keys = append(keys, k)
+		if strings.HasPrefix(k, prefix) {
+			keys = append(keys, k)
+		}
 	}
 	return keys
 }
