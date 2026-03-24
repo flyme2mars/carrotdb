@@ -1,55 +1,94 @@
-# 🥕 CarrotDB
+# 🥕 CarrotDB (v0.12.1 Stable)
 
-A high-performance, scalable, and educational Key-Value database written in Go.
+**A high-performance, sharded, and self-healing Key-Value database written in Go.**
 
-CarrotDB is designed to be simple to understand but powerful enough to handle massive datasets. It uses a **Log-Structured Storage Engine** (Bitcask-inspired) to ensure extreme write speeds and crash resilience.
+CarrotDB is an industrial-grade distributed database designed for extreme scalability and crash resilience. It combines the speed of **Bitcask** storage with the safety of **Raft** consensus and the horizontal power of **Consistent Hashing**.
 
-## ✨ Pro Features
-- **Unified Binary:** Every node is a gateway. No separate router needed for simple or complex clusters.
-- **Self-Healing Cluster:** Nodes automatically discover each other using a **Gossip Protocol**.
-- **Horizontal Sharding:** Distribute data across unlimited shards with zero configuration.
-- **High Availability:** Built-in **Raft Consensus** ensures zero data loss during node failures.
-- **V2 Dashboard:** Minimalist, monochromatic cluster grid for real-time monitoring.
+---
 
-## 🚀 Quick Start (One Command)
+## ✨ Features
+
+*   **Unified Architecture:** Every node acts as a gateway. No separate routers needed.
+*   **Self-Healing:** Nodes automatically discover each other using a **Gossip Protocol**.
+*   **Horizontal Sharding:** Distribute data across unlimited shards with zero configuration.
+*   **High Availability:** Built-in **Raft Consensus** ensures zero data loss during node failures.
+*   **Multi-Tenancy:** SDK-level logical namespacing provides isolated "databases" on a single cluster.
+*   **V2 Dashboard:** Professional, minimalist monochromatic UI for real-time cluster monitoring.
+*   **Optimized I/O:** Persistent connection pooling and buffered disk writes for maximum throughput.
+
+---
+
+## 🚀 Getting Started
 
 ### 1. Installation
-Download the latest binaries from the [Releases](https://github.com/flyme2mars/carrotdb/releases) page.
 
-### 2. Run a Single Node
+**Using Go:**
+```bash
+go install github.com/flyme2mars/carrotdb/cmd/carrotdb-server@latest
+go install github.com/flyme2mars/carrotdb/cmd/carrotdb@latest
+```
+
+**From Binaries:**
+Download the pre-compiled binaries for your OS from the [Releases](https://github.com/flyme2mars/carrotdb/releases) page.
+
+### 2. Basic Setup (Single Node)
+To use CarrotDB as a simple local Key-Value store:
 ```bash
 ./carrotdb-server
 ```
-That's it! CarrotDB is now running its storage engine AND router.
+*   **API:** Port 8000 (TCP)
+*   **Storage:** Port 6379 (Internal)
+*   **Dashboard:** [http://localhost:8080](http://localhost:8080)
 
-### 3. Start a Cluster (Example)
+### 3. Advanced Setup (Distributed Cluster)
+CarrotDB scales horizontally by adding shards.
 
-**Node 1 (Seed):**
+**Node 1 (The Seed):**
 ```bash
 ./carrotdb-server --id node1 --addr :6379 --gossip-addr :9000
 ```
 
-**Node 2 (Join):**
+**Node 2 (Join Shard 1):**
 ```bash
 ./carrotdb-server --id node2 --addr :6380 --gossip-addr :9001 --gossip-seed 127.0.0.1:9000
 ```
 
-**Connect to ANY node on port 8000!** Both nodes will automatically route your data to the correct shard.
-
-### 4. Monitoring
-Open your browser to **[http://localhost:8080](http://localhost:8080)** to view the cluster grid.
-
-### 4. Usage
-
-Connect your CLI to the **Router** (port 8000):
+**Node 3 (New Shard - Horizontal Scaling):**
 ```bash
-./carrotdb
-> SET key1 value1
-+OK
-> SET key2 value2
-+OK
+./carrotdb-server --id node3 --shard shard2 --addr :6381 --gossip-addr :9002 --gossip-seed 127.0.0.1:9000
 ```
-The Router will automatically store `key1` on Shard 1 and `key2` on Shard 2!
+
+---
+
+## 🔌 Client SDKs
+
+### Python SDK
+Install the official Python client:
+```bash
+cd sdk/python
+pip install .
+```
+
+**Usage Example:**
+```python
+from carrotdb import Client
+
+# Connect to any node in the cluster
+db = Client(host="localhost", port=8000, database="my_project")
+
+db.set("user:1", "Akshai")
+print(db.get("user:1")) # Outputs: Akshai
+```
+
+---
+
+## 📊 Monitoring
+Every CarrotDB node hosts a built-in dashboard. Open **[http://localhost:8080](http://localhost:8080)** in your browser to view:
+*   Real-time health of every node.
+*   Shard distribution and roles (Leader/Follower).
+*   Cluster-wide statistics and uptime.
+
+---
 
 ## 📄 License
-MIT
+MIT License. Created by Akshai.
