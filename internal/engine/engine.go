@@ -8,6 +8,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
