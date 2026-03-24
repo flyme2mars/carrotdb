@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"carrotdb/internal/server"
 	"carrotdb/pkg/sharding"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +16,9 @@ import (
 
 	"github.com/hashicorp/memberlist"
 )
+
+//go:embed all:static
+var staticAssets embed.FS
 
 type Router struct {
 	addr        string
@@ -135,10 +139,11 @@ func (r *Router) addNode(shardID string, addr string) {
 func (r *Router) startHTTP(addr string, staticDir string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", r.handleStatus)
-	if staticDir == "" {
-		staticDir = "pkg/dashboard"
-	}
-	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
+	
+	// Use embedded static assets
+	staticFS, _ := embed.FS.Sub(staticAssets, "static")
+	mux.Handle("/", http.FileServer(http.FS(staticFS)))
+	
 	log.Printf("📊 Dashboard available at http://localhost%s", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("HTTP server error: %v", err)
