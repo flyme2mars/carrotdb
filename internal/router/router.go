@@ -6,7 +6,6 @@ import (
 	"carrotdb/pkg/sharding"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -176,27 +175,29 @@ func (r *Router) handleClient(clientConn net.Conn) {
 		}
 
 		command := strings.ToUpper(parts[0])
-		key := ""
-		if len(parts) >= 2 {
-			key = parts[1]
-		}
+		key := parts[1]
 
-		// Handle non-sharded commands (ROLE, STATS, etc)
+		// Handle non-sharded commands (ROLE, COMPACT, etc)
 		if command == "ROLE" || command == "COMPACT" {
-			// For simplicity, just talk to the first available shard's leader
-			for shardID := range r.shardPool {
+			found := false
+			r.mu.RLock()
+			shardIDs := make([]string, 0, len(r.shardPool))
+			for id := range r.shardPool {
+				shardIDs = append(shardIDs, id)
+			}
+			r.mu.RUnlock()
+
+			for _, shardID := range shardIDs {
 				response, err := r.forwardToShard(shardID, input)
 				if err == nil {
 					fmt.Fprint(clientConn, response)
-					goto next
+					found = true
+					break
 				}
 			}
-			fmt.Fprintln(clientConn, "-ERROR: no shards available")
-			continue
-		}
-
-		if key == "" {
-			fmt.Fprintln(clientConn, "-ERROR: Usage: <COMMAND> <key> [value]")
+			if !found {
+				fmt.Fprintln(clientConn, "-ERROR: no shards available")
+			}
 			continue
 		}
 
@@ -212,7 +213,6 @@ func (r *Router) handleClient(clientConn net.Conn) {
 		} else {
 			fmt.Fprint(clientConn, response)
 		}
-	next:
 	}
 }
 
