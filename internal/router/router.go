@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -141,7 +142,7 @@ func (r *Router) startHTTP(addr string, staticDir string) {
 	mux.HandleFunc("/api/status", r.handleStatus)
 	
 	// Use embedded static assets
-	staticFS, _ := embed.FS.Sub(staticAssets, "static")
+	staticFS, _ := fs.Sub(staticAssets, "static")
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 	
 	log.Printf("📊 Dashboard available at http://localhost%s", addr)

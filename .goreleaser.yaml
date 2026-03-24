@@ -30,18 +30,6 @@ builds:
       - arm64
     main: ./cmd/carrotdb-server
     binary: carrotdb-server
-  - id: carrotdb-router
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    main: ./cmd/carrotdb-router
-    binary: carrotdb-router
 
 archives:
   - format: tar.gz
