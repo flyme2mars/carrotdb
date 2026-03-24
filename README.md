@@ -45,17 +45,17 @@ CarrotDB scales horizontally by adding shards.
 
 **Node 1 (The Seed):**
 ```bash
-./carrotdb-server --id node1 --addr :6379 --gossip-addr :9000
+./carrotdb-server --id node1 --addr :6379 --raft :7000 --gossip-addr :9000
 ```
 
 **Node 2 (Join Shard 1):**
 ```bash
-./carrotdb-server --id node2 --addr :6380 --gossip-addr :9001 --gossip-seed 127.0.0.1:9000
+./carrotdb-server --id node2 --addr :6380 --raft :7001 --gossip-addr :9001 --gossip-seed 127.0.0.1:9000
 ```
 
 **Node 3 (New Shard - Horizontal Scaling):**
 ```bash
-./carrotdb-server --id node3 --shard shard2 --addr :6381 --gossip-addr :9002 --gossip-seed 127.0.0.1:9000
+./carrotdb-server --id node3 --shard shard2 --addr :6381 --raft :7002 --gossip-addr :9002 --gossip-seed 127.0.0.1:9000
 ```
 
 ---
