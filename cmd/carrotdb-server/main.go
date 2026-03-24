@@ -2,6 +2,7 @@ package main
 
 import (
 	"carrotdb/internal/engine"
+	"carrotdb/internal/router"
 	"carrotdb/internal/server"
 	"flag"
 	"fmt"
@@ -22,6 +23,9 @@ func main() {
 		joinAddr   = flag.String("join", "", "Address of the leader to join (Raft)")
 		gossipAddr = flag.String("gossip-addr", ":9000", "Gossip bind address")
 		gossipSeed = flag.String("gossip-seed", "", "Gossip seed address")
+		routerAddr = flag.String("router-addr", ":8000", "Internal router TCP address")
+		dashAddr   = flag.String("dashboard-addr", ":8080", "Dashboard HTTP address")
+		staticDir  = flag.String("static-dir", "cmd/carrotdb-router/static", "Directory for dashboard static files")
 	)
 	flag.Parse()
 
@@ -45,6 +49,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to initialize server: %v", err)
 	}
+
+	// Start Internal Router
+	r := router.NewRouter(*routerAddr, s.Gossip())
+	go func() {
+		if err := r.Start(*dashAddr, *staticDir); err != nil {
+			log.Printf("failed to start internal router: %v", err)
+		}
+	}()
 
 	// If joinAddr is specified, try to join the cluster
 	if *joinAddr != "" {

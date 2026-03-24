@@ -60,5 +60,11 @@ CarrotDB is an educational, highly scalable Key-Value database written in Go. It
 *   **Python SDK:** A native Python library for easy integration into web apps.
 *   **Prefix Searching:** Added `KEYS` command to the server protocol for namespace management.
 
+### Phase 11: Symmetric Node Architecture
+*Goal: Simplify minimal use-cases and remove single points of failure.*
+*   **Embedded Router:** The traffic-routing logic is now built into every `carrotdb-server`.
+*   **Unified Binary:** Removed the standalone router. Users now only need to run one type of program.
+*   **Elastic Scaling:** Any node can act as an entry point. The cluster grows organically as nodes join.
+
 ---
-*Status: Phase 10 (SDK) completed. CarrotDB is now a multi-tenant distributed database cluster.*
+*Status: Phase 11 (Symmetric) completed. CarrotDB is now a unified, modular distributed system.*

@@ -109,7 +109,7 @@
     <div class="layout">
         <header>
             <h1>CarrotDB Cluster</h1>
-            <span class="version">v0.9.1</span>
+            <span class="version">v0.11.2</span>
         </header>
 
         <div class="stats">
@@ -156,8 +156,6 @@
                     let nodeHtml = '';
                     nodes.forEach(addr => {
                         nodeCount++;
-                        // For now, we assume if shard is alive, node is alive. 
-                        // In v1.0 we will probe individual node roles.
                         onlineNodes += isShardAlive ? 1 : 0;
 
                         nodeHtml += `

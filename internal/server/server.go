@@ -261,6 +261,11 @@ func (d *gossipDelegate) GetBroadcasts(overhead, limit int) [][]byte { return ni
 func (d *gossipDelegate) LocalState(join bool) []byte                { return nil }
 func (d *gossipDelegate) MergeRemoteState(buf []byte, join bool)     {}
 
+// Gossip returns the memberlist instance.
+func (s *Server) Gossip() *memberlist.Memberlist {
+	return s.gossip
+}
+
 // Start listens for incoming connections and handles them in separate goroutines.
 func (s *Server) Start() error {
 	listener, err := net.Listen("tcp", s.addr)
