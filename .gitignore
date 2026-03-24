@@ -5,6 +5,17 @@
 *.dll
 *.so
 *.dylib
+carrotdb
+carrotdb-server
+carrotdb-router
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+sdk/python/carrotdb.egg-info/
+dist/
+build/
 
 # Test binary, built with `go test -c`
 *.test
