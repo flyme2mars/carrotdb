@@ -65,7 +65,7 @@ func startREPL(addr string) {
 	}
 	defer conn.Close()
 
-	color.Cyan("🥕 CarrotDB CLI Client (v0.13.0)")
+	color.Cyan("🥕 CarrotDB CLI Client (v0.14.0)")
 	color.Green("Connected to %s", addr)
 	fmt.Println("Type 'HELP' for commands or 'EXIT' to quit.")
 

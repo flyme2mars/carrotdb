@@ -43,20 +43,24 @@ func (f *FSM) Apply(l *raft.Log) interface{} {
 
 // Snapshot returns a snapshot of the current state.
 func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
-	// For now, we return an empty snapshot. 
-	// In the future, this would involve copying the current database state.
-	return &Snapshot{}, nil
+	return &Snapshot{engine: f.engine}, nil
 }
 
 // Restore restores the FSM from a snapshot.
 func (f *FSM) Restore(r io.ReadCloser) error {
-	// This would involve loading the database state from the snapshot.
-	return nil
+	defer r.Close()
+	return f.engine.ReadFrom(r)
 }
 
-type Snapshot struct{}
+type Snapshot struct {
+	engine *engine.Engine
+}
 
 func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
+	if err := s.engine.WriteTo(sink); err != nil {
+		sink.Cancel()
+		return err
+	}
 	return sink.Close()
 }
 

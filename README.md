@@ -1,4 +1,4 @@
-# 🥕 CarrotDB (v0.13.0 Stable)
+# 🥕 CarrotDB (v0.14.0 Stable)
 
 **A high-performance, sharded, and self-healing Key-Value database written in Go.**
 
@@ -12,6 +12,7 @@ CarrotDB is an industrial-grade distributed database designed for extreme scalab
 *   **Self-Healing:** Nodes automatically discover each other using a **Gossip Protocol**.
 *   **Horizontal Sharding:** Distribute data across unlimited shards with zero configuration.
 *   **High Availability:** Built-in **Raft Consensus** ensures zero data loss during node failures.
+*   **Snapshotting:** Automatic Raft log compaction for infinite durability without disk bloat.
 *   **Multi-Tenancy:** SDK-level logical namespacing provides isolated "databases" on a single cluster.
 *   **V2 Dashboard:** Professional, minimalist monochromatic UI for real-time cluster monitoring.
 *   **Cluster Topology:** CLI-level insight into shard health and node distribution.

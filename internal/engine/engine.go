@@ -3,6 +3,7 @@ package engine
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -367,4 +368,85 @@ func (e *Engine) Close() error {
 	defer e.mu.Unlock()
 	e.writer.Flush()
 	return e.log.Close()
+}
+
+// WriteTo serializes all current key-value pairs to the writer.
+// This is used for creating Raft snapshots.
+func (e *Engine) WriteTo(w io.Writer) error {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	data := make(map[string]string)
+	for key, loc := range e.keyDir {
+		valueOffset := loc.offset + int64(headerSize) + int64(len(key))
+		valBytes := make([]byte, loc.valueSize)
+		if _, err := e.log.ReadAt(valBytes, valueOffset); err != nil {
+			return err
+		}
+		data[key] = string(valBytes)
+	}
+
+	return json.NewEncoder(w).Encode(data)
+}
+
+// ReadFrom restores the engine state from a reader.
+// It truncates the current log and rebuilds the state.
+func (e *Engine) ReadFrom(r io.Reader) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	var data map[string]string
+	if err := json.NewDecoder(r).Decode(&data); err != nil {
+		return err
+	}
+
+	// 1. Truncate current log
+	if err := e.log.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := e.log.Seek(0, 0); err != nil {
+		return err
+	}
+	e.writer = bufio.NewWriter(e.log)
+	e.keyDir = make(map[string]location)
+
+	// 2. Re-write all data to log
+	var offset int64
+	for key, value := range data {
+		timestamp := uint32(time.Now().Unix())
+		keySize := uint32(len(key))
+		valueSize := uint32(len(value))
+
+		header := make([]byte, headerSize)
+		binary.LittleEndian.PutUint32(header[4:8], timestamp)
+		binary.LittleEndian.PutUint32(header[8:12], keySize)
+		binary.LittleEndian.PutUint32(header[12:16], valueSize)
+
+		crc := crc32.ChecksumIEEE(header[4:])
+		crc = crc32.Update(crc, crc32.IEEETable, []byte(key))
+		crc = crc32.Update(crc, crc32.IEEETable, []byte(value))
+		binary.LittleEndian.PutUint32(header[0:4], crc)
+
+		if _, err := e.writer.Write(header); err != nil {
+			return err
+		}
+		if _, err := e.writer.WriteString(key); err != nil {
+			return err
+		}
+		if _, err := e.writer.WriteString(value); err != nil {
+			return err
+		}
+
+		e.keyDir[key] = location{
+			offset:    offset,
+			valueSize: valueSize,
+			timestamp: timestamp,
+		}
+		offset += int64(headerSize) + int64(keySize) + int64(valueSize)
+	}
+
+	if err := e.writer.Flush(); err != nil {
+		return err
+	}
+	return e.log.Sync()
 }
