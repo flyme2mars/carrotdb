@@ -175,17 +175,32 @@ func (r *Router) handleClient(clientConn net.Conn) {
 	for scanner.Scan() {
 		input := scanner.Text()
 		parts := strings.Fields(input)
-		if len(parts) < 2 {
-			fmt.Fprintln(clientConn, "-ERROR: Usage: <COMMAND> <key> [value]")
+		if len(parts) == 0 {
 			continue
 		}
 
 		command := strings.ToUpper(parts[0])
-		key := parts[1]
 
-		// Handle non-sharded commands (ROLE, COMPACT, etc)
-		if command == "ROLE" || command == "COMPACT" {
+		// 1. Handle Cluster-Wide / Administrative Commands
+		if command == "CLUSTER" {
+			r.mu.RLock()
+			var sb strings.Builder
+			sb.WriteString("+") // Start of data
+			for id, nodes := range r.shardPool {
+				status := "ALIVE"
+				if !r.shardStatus[id] {
+					status = "DOWN"
+				}
+				sb.WriteString(fmt.Sprintf("Shard: %s [%s] Nodes: %s; ", id, status, strings.Join(nodes, ",")))
+			}
+			r.mu.RUnlock()
+			fmt.Fprintln(clientConn, sb.String())
+			continue
+		}
+
+		if command == "ROLE" || command == "COMPACT" || command == "KEYS" {
 			found := false
+			allKeys := make(map[string]bool)
 			r.mu.RLock()
 			shardIDs := make([]string, 0, len(r.shardPool))
 			for id := range r.shardPool {
@@ -196,17 +211,42 @@ func (r *Router) handleClient(clientConn net.Conn) {
 			for _, shardID := range shardIDs {
 				response, err := r.forwardToShard(shardID, input)
 				if err == nil {
-					fmt.Fprint(clientConn, response)
 					found = true
-					break
+					if command == "KEYS" {
+						// Merge results for KEYS
+						if strings.HasPrefix(response, "+") {
+							keys := strings.Fields(response[1:])
+							for _, k := range keys {
+								allKeys[k] = true
+							}
+						}
+					} else {
+						// For ROLE/COMPACT, just return first success
+						fmt.Fprint(clientConn, response)
+						break
+					}
 				}
 			}
-			if !found {
+
+			if command == "KEYS" && found {
+				keysList := make([]string, 0, len(allKeys))
+				for k := range allKeys {
+					keysList = append(keysList, k)
+				}
+				fmt.Fprintf(clientConn, "+%s\r\n", strings.Join(keysList, " "))
+			} else if !found {
 				fmt.Fprintln(clientConn, "-ERROR: no shards available")
 			}
 			continue
 		}
 
+		// 2. Handle Sharded Commands (SET, GET, DELETE)
+		if len(parts) < 2 {
+			fmt.Fprintf(clientConn, "-ERROR: Usage: %s <key> [value]\r\n", command)
+			continue
+		}
+
+		key := parts[1]
 		shardID := r.ring.GetShard(key)
 		if shardID == "" {
 			fmt.Fprintf(clientConn, "-ERROR: cluster not ready, discovering nodes...\r\n")
