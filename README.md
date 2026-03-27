@@ -105,8 +105,8 @@ from carrotdb import Client
 # Connect to any node in the cluster
 db = Client(host="localhost", port=8000, database="my_project")
 
-db.set("user:1", "Akshai")
-print(db.get("user:1")) # Outputs: Akshai
+db.set("user:1", "Alice")
+print(db.get("user:1")) # Outputs: Alice
 ```
 
 ---
@@ -120,4 +120,4 @@ Every CarrotDB node hosts a built-in dashboard. Open **[http://localhost:8080](h
 ---
 
 ## 📄 License
-MIT License. Created by Akshai.
+MIT License.
