@@ -1,0 +1,67 @@
+services:
+  node1:
+    build: .
+    container_name: carrotdb-node1
+    environment:
+      - CARROT_ID=node1
+      - CARROT_SHARD=shard1
+      - CARROT_ADDR=:6379
+      - CARROT_RAFT=:7000
+      - CARROT_GOSSIP_ADDR=:9000
+      - CARROT_ROUTER_ADDR=:8000
+      - CARROT_DASHBOARD_ADDR=:8080
+    ports:
+      - "8000:8000" # Router
+      - "8080:8080" # Dashboard
+    volumes:
+      - node1_data:/home/carrot/data
+    networks:
+      - carrot_net
+
+  node2:
+    build: .
+    container_name: carrotdb-node2
+    depends_on:
+      - node1
+    environment:
+      - CARROT_ID=node2
+      - CARROT_SHARD=shard1
+      - CARROT_ADDR=:6379
+      - CARROT_RAFT=:7000
+      - CARROT_GOSSIP_ADDR=:9000
+      - CARROT_ROUTER_ADDR=:8000
+      - CARROT_DASHBOARD_ADDR=:8080
+      - CARROT_GOSSIP_SEED=node1:9000
+      - CARROT_JOIN=node1:6379
+    volumes:
+      - node2_data:/home/carrot/data
+    networks:
+      - carrot_net
+
+  node3:
+    build: .
+    container_name: carrotdb-node3
+    depends_on:
+      - node1
+    environment:
+      - CARROT_ID=node3
+      - CARROT_SHARD=shard2 # Horizontal scaling: New shard
+      - CARROT_ADDR=:6379
+      - CARROT_RAFT=:7000
+      - CARROT_GOSSIP_ADDR=:9000
+      - CARROT_ROUTER_ADDR=:8000
+      - CARROT_DASHBOARD_ADDR=:8080
+      - CARROT_GOSSIP_SEED=node1:9000
+    volumes:
+      - node3_data:/home/carrot/data
+    networks:
+      - carrot_net
+
+networks:
+  carrot_net:
+    driver: bridge
+
+volumes:
+  node1_data:
+  node2_data:
+  node3_data:

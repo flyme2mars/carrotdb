@@ -1,4 +1,4 @@
-# 🥕 CarrotDB (v0.14.0 Stable)
+# 🥕 CarrotDB (v1.0.0 Stable)
 
 **A high-performance, sharded, and self-healing Key-Value database written in Go.**
 
@@ -16,7 +16,7 @@ CarrotDB is an industrial-grade distributed database designed for extreme scalab
 *   **Multi-Tenancy:** SDK-level logical namespacing provides isolated "databases" on a single cluster.
 *   **V2 Dashboard:** Professional, minimalist monochromatic UI for real-time cluster monitoring.
 *   **Cluster Topology:** CLI-level insight into shard health and node distribution.
-*   **Optimized I/O:** Persistent connection pooling and buffered disk writes for maximum throughput.
+*   **Cloud Native:** First-class Docker and Kubernetes support with environment-based configuration.
 
 ---
 
@@ -24,11 +24,38 @@ CarrotDB is an industrial-grade distributed database designed for extreme scalab
 
 ### 1. Installation
 
+**Using Docker (Recommended):**
+```bash
+docker pull ghcr.io/flyme2mars/carrotdb:latest
+```
+
 **Using Go:**
 ```bash
 go install github.com/flyme2mars/carrotdb/cmd/carrotdb-server@latest
 go install github.com/flyme2mars/carrotdb/cmd/carrotdb@latest
 ```
+
+---
+
+## 🐳 Docker Deployment
+
+### Single Node
+```bash
+docker run -d \
+  --name carrotdb \
+  -p 8000:8000 -p 8080:8080 \
+  -v carrot_data:/home/carrot/data \
+  ghcr.io/flyme2mars/carrotdb:latest
+```
+
+### 3-Node Cluster (Docker Compose)
+We provide a ready-to-use `docker-compose.yaml`. Simply run:
+```bash
+docker-compose up -d
+```
+This spins up a multi-shard, high-availability cluster with persistent storage and auto-discovery.
+
+---
 
 **From Binaries:**
 Download the pre-compiled binaries for your OS from the [Releases](https://github.com/flyme2mars/carrotdb/releases) page.

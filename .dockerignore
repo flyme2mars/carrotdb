@@ -1,0 +1,33 @@
+# Docker ignore file
+# Source code management
+.git
+.github
+.gitignore
+
+# Go artifacts
+vendor/
+go.work
+go.work.sum
+*.test
+*.out
+/carrotdb
+/carrotdb-server
+/carrotdb-router
+
+# Local data and logs
+data/
+*.log
+*.data
+*.db
+
+# Python artifacts
+__pycache__/
+sdk/python/dist/
+sdk/python/build/
+sdk/python/carrotdb.egg-info/
+
+# Misc
+.DS_Store
+*.md
+conductor/
+LICENSE
