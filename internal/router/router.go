@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/hashicorp/memberlist"
 )
 
@@ -30,9 +31,10 @@ type Router struct {
 	conns       map[string]net.Conn // addr -> persistent connection
 	mu          sync.RWMutex
 	gossip      *memberlist.Memberlist
+	Trace       bool
 }
 
-func NewRouter(addr string, gossip *memberlist.Memberlist) *Router {
+func NewRouter(addr string, gossip *memberlist.Memberlist, trace bool) *Router {
 	r := &Router{
 		addr:        addr,
 		ring:        sharding.NewHashRing(40),
@@ -41,6 +43,7 @@ func NewRouter(addr string, gossip *memberlist.Memberlist) *Router {
 		shardStatus: make(map[string]bool),
 		conns:       make(map[string]net.Conn),
 		gossip:      gossip,
+		Trace:       trace,
 	}
 	go r.startHealthCheck()
 	return r
@@ -121,6 +124,9 @@ func (r *Router) addNode(shardID string, addr string) {
 
 	nodes, exists := r.shardPool[shardID]
 	if !exists {
+		if r.Trace {
+			color.Blue("[TRACE] Router: Discovered new Shard '%s', adding to Hash Ring", shardID)
+		}
 		r.ring.AddShard(shardID)
 		r.shardStatus[shardID] = true
 	}
@@ -131,6 +137,9 @@ func (r *Router) addNode(shardID string, addr string) {
 		}
 	}
 
+	if r.Trace {
+		color.Blue("[TRACE] Router: Registered new Node '%s' to Shard '%s'", addr, shardID)
+	}
 	r.shardPool[shardID] = append(nodes, addr)
 	if r.lastLeader[shardID] == "" {
 		r.lastLeader[shardID] = addr
@@ -248,6 +257,11 @@ func (r *Router) handleClient(clientConn net.Conn) {
 
 		key := parts[1]
 		shardID := r.ring.GetShard(key)
+
+		if r.Trace {
+			color.Blue("[TRACE] Router: Key '%s' hashed to Shard '%s'", key, shardID)
+		}
+
 		if shardID == "" {
 			fmt.Fprintf(clientConn, "-ERROR: cluster not ready, discovering nodes...\r\n")
 			continue
@@ -266,6 +280,10 @@ func (r *Router) forwardToShard(shardID string, command string) (string, error) 
 	r.mu.RLock()
 	addr := r.lastLeader[shardID]
 	r.mu.RUnlock()
+
+	if r.Trace {
+		color.Blue("[TRACE] Router: Routing command to Leader at %s", addr)
+	}
 
 	resp, err := r.tryForward(addr, command)
 	if err != nil || strings.Contains(resp, "not a Leader") {

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 var (
@@ -38,10 +40,11 @@ type Engine struct {
 	keyDir map[string]location
 	log    *os.File
 	writer *bufio.Writer
+	Trace  bool
 }
 
 // NewEngine creates a new instance of the Engine and restores its state from the log.
-func NewEngine(logPath string) (*Engine, error) {
+func NewEngine(logPath string, trace bool) (*Engine, error) {
 	file, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
@@ -51,6 +54,7 @@ func NewEngine(logPath string) (*Engine, error) {
 		keyDir: make(map[string]location),
 		log:    file,
 		writer: bufio.NewWriter(file),
+		Trace:  trace,
 	}
 
 	if err := e.restore(); err != nil {
@@ -180,6 +184,10 @@ func (e *Engine) Put(key, value string) error {
 		timestamp: timestamp,
 	}
 
+	if e.Trace {
+		color.Magenta("[TRACE] Engine: Appending key '%s' (value size: %d) to log at offset %d", key, len(value), offset)
+	}
+
 	return nil
 }
 
@@ -197,6 +205,10 @@ func (e *Engine) Get(key string) (string, error) {
 	// Record is: CRC(4) | TS(4) | KS(4) | VS(4) | Key | Value
 	// valueOffset = loc.offset + headerSize + len(key)
 	valueOffset := loc.offset + int64(headerSize) + int64(len(key))
+
+	if e.Trace {
+		color.Magenta("[TRACE] Engine: Found key '%s' in keyDir, reading value from offset %d (Size: %d)", key, valueOffset, loc.valueSize)
+	}
 
 	valBytes := make([]byte, loc.valueSize)
 	_, err := e.log.ReadAt(valBytes, valueOffset)
@@ -219,6 +231,10 @@ func (e *Engine) Delete(key string) error {
 	timestamp := uint32(time.Now().Unix())
 	keySize := uint32(len(key))
 	valueSize := tombstone
+
+	if e.Trace {
+		color.Magenta("[TRACE] Engine: Writing tombstone for key '%s' to log", key)
+	}
 
 	// Prepare tombstone record
 	header := make([]byte, headerSize)

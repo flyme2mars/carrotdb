@@ -16,6 +16,7 @@ CarrotDB is an industrial-grade distributed database designed for extreme scalab
 *   **Multi-Tenancy:** SDK-level logical namespacing provides isolated "databases" on a single cluster.
 *   **V2 Dashboard:** Professional, minimalist monochromatic UI for real-time cluster monitoring.
 *   **Cluster Topology:** CLI-level insight into shard health and node distribution.
+*   **Trace Mode:** Educational "--trace" flag to visualize the internal request lifecycle across all layers.
 *   **Cloud Native:** First-class Docker and Kubernetes support with environment-based configuration.
 
 ---
@@ -54,6 +55,18 @@ We provide a ready-to-use `docker-compose.yaml`. Simply run:
 docker-compose up -d
 ```
 This spins up a multi-shard, high-availability cluster with persistent storage and auto-discovery.
+
+---
+
+## 🎓 Educational: Trace Mode
+CarrotDB is built for learning. Run any node with the `--trace` flag to see the "hidden" lifecycle of every request:
+```bash
+./carrotdb-server --trace
+```
+**You will see color-coded logs for:**
+*   **Blue (Router):** How keys are hashed and mapped to shards.
+*   **Cyan (Server/Raft):** When commands are proposed and committed to the cluster.
+*   **Magenta (Engine):** Exactly where and when data is written to the physical append-only log.
 
 ---
 

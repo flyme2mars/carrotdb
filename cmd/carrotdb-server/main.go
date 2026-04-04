@@ -35,6 +35,7 @@ func main() {
 		dashAddr   = flag.String("dashboard-addr", getEnv("CARROT_DASHBOARD_ADDR", ":8080"), "Dashboard HTTP address (Env: CARROT_DASHBOARD_ADDR)")
 		staticDir  = flag.String("static-dir", getEnv("CARROT_STATIC_DIR", "static"), "Directory for dashboard static files (Env: CARROT_STATIC_DIR)")
 		dataBase   = flag.String("data-dir", getEnv("CARROT_DATA_DIR", "data"), "Base directory for data (Env: CARROT_DATA_DIR)")
+		trace      = flag.Bool("trace", false, "Enable educational protocol tracing")
 	)
 	flag.Parse()
 
@@ -47,20 +48,20 @@ func main() {
 	}
 
 	// Initialize the storage engine for this node
-	db, err := engine.NewEngine(filepath.Join(dataDir, "carrotdb.log"))
+	db, err := engine.NewEngine(filepath.Join(dataDir, "carrotdb.log"), *trace)
 	if err != nil {
 		log.Fatalf("failed to start engine: %v", err)
 	}
 	defer db.Close()
 
 	// Initialize and start the Server with Raft and Gossip
-	s, err := server.NewServer(*httpAddr, *raftAddr, *nodeID, *shardID, db, *gossipAddr, *gossipSeed)
+	s, err := server.NewServer(*httpAddr, *raftAddr, *nodeID, *shardID, db, *gossipAddr, *gossipSeed, *trace)
 	if err != nil {
 		log.Fatalf("failed to initialize server: %v", err)
 	}
 
 	// Start Internal Router
-	r := router.NewRouter(*routerAddr, s.Gossip())
+	r := router.NewRouter(*routerAddr, s.Gossip(), *trace)
 	go func() {
 		if err := r.Start(*dashAddr, *staticDir); err != nil {
 			log.Printf("failed to start internal router: %v", err)

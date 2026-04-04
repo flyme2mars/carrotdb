@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
@@ -37,16 +38,17 @@ type Server struct {
 	gossip  *memberlist.Memberlist
 	ring    *sharding.HashRing
 	mu      sync.RWMutex
+	Trace   bool
 }
 
 // NewServer creates a new instance of the Server with Raft and Gossip initialized.
-func NewServer(addr string, raftAddr string, nodeID string, shardID string, engine *engine.Engine, gossipAddr string, gossipSeed string) (*Server, error) {
+func NewServer(addr string, raftAddr string, nodeID string, shardID string, engine *engine.Engine, gossipAddr string, gossipSeed string, trace bool) (*Server, error) {
 	// Initialize Raft
 	config := raft.DefaultConfig()
 	config.LocalID = raft.ServerID(nodeID)
 
 	// Setup FSM
-	fsm := NewFSM(engine)
+	fsm := NewFSM(engine, trace)
 
 	// Setup Raft Storage
 	dataDir := filepath.Join("data", nodeID)
@@ -155,6 +157,7 @@ func NewServer(addr string, raftAddr string, nodeID string, shardID string, engi
 		raft:    r,
 		gossip:  m,
 		ring:    sharding.NewHashRing(40),
+		Trace:   trace,
 	}
 
 	go s.monitorRing()
@@ -303,6 +306,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		command := strings.ToUpper(parts[0])
+		if s.Trace {
+			color.Cyan("[TRACE] Server: Received command '%s' from %s", command, conn.RemoteAddr())
+		}
 
 		switch command {
 		case "QUIT", "EXIT":
@@ -323,6 +329,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 				cmd := Command{Op: "SET", Key: key, Value: value}
 				data, _ := json.Marshal(cmd)
 
+				if s.Trace {
+					color.Cyan("[TRACE] Server: Proposing SET to Raft cluster (Key: %s)", key)
+				}
+
 				future := s.raft.Apply(data, 10*time.Second)
 				if err := future.Error(); err != nil {
 					fmt.Fprintf(conn, "-ERROR: %v\r\n", err)
@@ -336,6 +346,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 				fmt.Fprintln(conn, "-ERROR: Usage: GET <key>")
 			} else {
 				key := parts[1]
+				if s.Trace {
+					color.Cyan("[TRACE] Server: Local read for key: %s", key)
+				}
 				val, err := s.engine.Get(key)
 				if err != nil {
 					fmt.Fprintf(conn, "-ERROR: %v\r\n", err)
@@ -356,6 +369,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 				key := parts[1]
 				cmd := Command{Op: "DELETE", Key: key}
 				data, _ := json.Marshal(cmd)
+
+				if s.Trace {
+					color.Cyan("[TRACE] Server: Proposing DELETE to Raft cluster (Key: %s)", key)
+				}
 
 				future := s.raft.Apply(data, 10*time.Second)
 				if err := future.Error(); err != nil {
