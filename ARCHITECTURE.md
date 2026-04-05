@@ -18,8 +18,8 @@ graph LR
     subgraph "Disk (Log File)"
         LF["[Header|key1|value1][Header|key2|value2]..."]
     end
-    SET["SET key1 value1"] --> KD
-    SET --> LF
+    S["SET key1 value1"] --> KD
+    S --> LF
 ```
 
 *   **Sequential vs Random:** Sequential writes are ~10-100x faster because the disk head doesn't have to "seek" all over the platter.
@@ -46,7 +46,7 @@ sequenceDiagram
     L->>F1: Replicate Log
     L->>F2: Replicate Log
     F1-->>L: ACK
-    Note over L,F1: Quorum Reached (2/3)
+    Note over L,F1: Quorum Reached (2 of 3)
     L->>L: Commit to Engine
     L-->>C: +OK
     L->>F2: (Async) Commit
@@ -61,9 +61,9 @@ How do nodes find each other without a "Master" server? They gossip.
 
 ```mermaid
 graph TD
-    A[Node A] -- "Ping (Are you alive?)" --> B[Node B]
+    A["Node A"] -- "Ping (Are you alive?)" --> B["Node B"]
     B -- "Ack (Yes!)" --> A
-    A -- "Gossip: I found Node B at 10.0.0.5" --> C[Node C]
+    A -- "Gossip: I found Node B at 10.0.0.5" --> C["Node C"]
     C -- "Gossip: I'm here too!" --> B
 ```
 
@@ -77,12 +77,12 @@ CarrotDB scales horizontally by splitting data into **Shards**. We use a **Hash 
 ```mermaid
 graph TD
     subgraph "Consistent Hash Ring"
-    R((Hash Ring))
-    S1[Shard 1] --- R
-    S2[Shard 2] --- R
-    S3[Shard 3] --- R
-    K1(Key: 'user:1') -.-> S1
-    K2(Key: 'user:2') -.-> S2
+    R(("Hash Ring"))
+    S1["Shard 1"] --- R
+    S2["Shard 2"] --- R
+    S3["Shard 3"] --- R
+    K1("Key: 'user:1'") -.-> S1
+    K2("Key: 'user:2'") -.-> S2
     end
 ```
 
@@ -96,12 +96,12 @@ Every CarrotDB node is **Symmetric**. You can talk to any node, and it will act 
 
 ```mermaid
 graph LR
-    Client -->|GET user:1| NodeA[Node A]
-    NodeA -->|Internal Hash| ShardID[Shard 2]
-    NodeA -->|Forward| NodeB[Node B (Shard 2 Leader)]
-    NodeB -->|Read Disk| Value[Value]
-    Value --> NodeA
-    NodeA -->|Response| Client
+    C["Client"] -->|GET user:1| A["Node A"]
+    A -->|Internal Hash| S["Shard 2"]
+    A -->|Forward| B["Node B (Shard 2 Leader)"]
+    B -->|Read Disk| V["Value"]
+    V --> A
+    A -->|Response| C
 ```
 
 ---
