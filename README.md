@@ -4,6 +4,8 @@
 
 CarrotDB is an industrial-grade distributed database designed for extreme scalability and crash resilience. It combines the speed of **Bitcask** storage with the safety of **Raft** consensus and the horizontal power of **Consistent Hashing**.
 
+**Read the [Architecture Guide](ARCHITECTURE.md) for a deep dive into the theory.**
+
 ---
 
 ## ✨ Features
