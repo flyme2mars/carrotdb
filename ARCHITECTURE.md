@@ -1,71 +1,115 @@
 # CarrotDB Architecture: A Masterclass in Distributed Systems
 
-CarrotDB is more than just a database; it is a **living textbook** designed to teach the fundamental trade-offs of modern distributed storage. This document explains the "Why" and "How" behind every architectural decision.
+CarrotDB is more than just a database; it is a **living textbook** designed to teach the fundamental trade-offs of modern distributed storage. This document explains the "Why" and "How" behind every architectural decision using visual diagrams and technical deep-dives.
 
 ---
 
 ## 1. Storage: The Bitcask Model
-Traditional databases (like PostgreSQL or MySQL) use **B-Trees**. B-Trees are complex and require "random" disk access, which can be slow. CarrotDB uses a **Log-Structured Merge-ish (Bitcask)** model.
+CarrotDB uses a **Log-Structured Merge-ish (Bitcask)** model, which transforms slow random disk I/O into fast sequential I/O.
 
 ### 📝 The Append-Only Log
 Every write (`SET`) in CarrotDB is simply appended to the end of a file.
-*   **Why?** Sequential writes are significantly faster than random writes because the disk head doesn't have to "seek" all over the platter.
-*   **The Trade-off:** The file grows forever. To solve this, CarrotDB implements **Compaction** (merging old logs and removing stale keys).
 
-### 🧠 The KeyDir (In-Memory Index)
-To make reads fast, CarrotDB keeps all **Keys** in memory, but all **Values** on disk.
-*   **Storage:** `map[string]Location{offset, size}`.
-*   **The Result:** A `GET` request is always exactly **one disk seek**. This provides O(1) performance while allowing you to store datasets larger than your available RAM.
+```mermaid
+graph LR
+    subgraph "In-Memory (KeyDir)"
+        KD["key1 -> {offset: 0, size: 10}"]
+    end
+    subgraph "Disk (Log File)"
+        LF["[Header|key1|value1][Header|key2|value2]..."]
+    end
+    SET["SET key1 value1"] --> KD
+    SET --> LF
+```
+
+*   **Sequential vs Random:** Sequential writes are ~10-100x faster because the disk head doesn't have to "seek" all over the platter.
+*   **Compaction:** Since the log is append-only, deleting a key just adds a **Tombstone**. A background process eventually merges files to reclaim space.
+
+> **💡 Pro-Tip:** Bitcask's main limitation is that **all keys must fit in RAM**. If your keyspace exceeds memory, you need a more complex structure like an LSM-Tree (used in RocksDB).
 
 ---
 
 ## 2. Consistency: The Raft Consensus Algorithm
-In a distributed system, nodes can fail or network messages can be lost. How do we ensure everyone agrees on the data? CarrotDB uses **Raft**.
+In a distributed system, we need a way for nodes to agree on a single "truth" even when some fail. CarrotDB uses **Raft**.
 
-### 👑 Leaders and Followers
-A CarrotDB shard elects a single **Leader**. All writes go to the Leader.
-*   **The Log Replication:** The Leader proposes a change to its **Followers**. Once a majority (quorum) acknowledges the change, it is "committed."
-*   **Strong Consistency:** Raft ensures that as long as a majority of nodes are alive, the database remains correct and linearizable.
+### 👑 The Consensus Cycle
+A write is only considered successful when a **Quorum** (majority) of nodes agree.
 
-### 📸 Snapshotting & FSM
-The **Finite State Machine (FSM)** is the "brain" that turns Raft logs into actual data.
-*   **Snapshotting:** Instead of replaying millions of logs on restart, CarrotDB takes a "picture" of the state and clears the log history. This is essential for long-term durability.
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as Leader
+    participant F1 as Follower 1
+    participant F2 as Follower 2
+
+    C->>L: SET key "val"
+    L->>F1: Replicate Log
+    L->>F2: Replicate Log
+    F1-->>L: ACK
+    Note over L,F1: Quorum Reached (2/3)
+    L->>L: Commit to Engine
+    L-->>C: +OK
+    L->>F2: (Async) Commit
+```
+
+*   **Strong Consistency:** Raft ensures that as long as a majority (e.g., 2 out of 3) are alive, the system is **linearizable** (it behaves like a single machine).
 
 ---
 
-## 3. Membership: The Gossip Protocol (SWIM)
-How does Node A know that Node B just joined the cluster without a central "master" server? CarrotDB uses **Gossip**.
+## 3. Membership: Gossip (SWIM)
+How do nodes find each other without a "Master" server? They gossip.
 
-*   **SWIM Protocol:** Nodes periodically "ping" a few random neighbors. If a neighbor doesn't respond, the news of its "suspected" failure spreads through the cluster like a rumor (gossip).
-*   **Discovery:** When you join a cluster, you only need to know **one** existing node's address. The Gossip protocol will automatically introduce you to everyone else.
+```mermaid
+graph TD
+    A[Node A] -- "Ping (Are you alive?)" --> B[Node B]
+    B -- "Ack (Yes!)" --> A
+    A -- "Gossip: I found Node B at 10.0.0.5" --> C[Node C]
+    C -- "Gossip: I'm here too!" --> B
+```
+
+*   **SWIM Protocol:** Nodes periodically "ping" random neighbors. If a node is slow, it's marked as **Suspect**. If it stays slow, it's marked **Dead**, and this news "gossips" through the cluster.
 
 ---
 
 ## 4. Scaling: Consistent Hashing
-CarrotDB scales horizontally by splitting data into **Shards**. To decide which shard owns a key, we use **Consistent Hashing**.
+CarrotDB scales horizontally by splitting data into **Shards**. We use a **Hash Ring** to decide which shard owns which key.
 
-### 💍 The Hash Ring
-Imagine a circle (a ring) where every point is a number from 0 to 2^32.
-1.  We hash every **Shard ID** to a point on the ring.
-2.  We hash every **Key** to a point on the ring.
-3.  The key is owned by the first Shard it finds while moving clockwise around the ring.
+```mermaid
+graph TD
+    subgraph "Consistent Hash Ring"
+    R((Hash Ring))
+    S1[Shard 1] --- R
+    S2[Shard 2] --- R
+    S3[Shard 3] --- R
+    K1(Key: 'user:1') -.-> S1
+    K2(Key: 'user:2') -.-> S2
+    end
+```
 
-### 🌀 Virtual Nodes
-To prevent "hotspots" (one shard getting too much data), CarrotDB uses **Virtual Nodes**. Every physical shard is represented multiple times on the ring, ensuring a statistically even distribution of data.
+### 🌀 Why Virtual Nodes?
+If we only had 3 points on the ring, one shard might accidentally get 60% of the data. By giving each shard **40 Virtual Nodes**, we scatter them across the ring, ensuring a near-perfectly even data distribution.
 
 ---
 
-## 5. Symmetry: The Unified Node Architecture
-Unlike other databases that have separate "Router" and "Storage" binaries, every CarrotDB node is **Symmetric**.
-*   **Every node is a Router:** Any node can receive a request from a client.
-*   **Every node is a Storage Engine:** Every node participates in a Raft group.
-*   **The Result:** There is no "single point of failure." You can point your application at any node in the cluster, and it will correctly route your request to the leader of the appropriate shard.
+## 5. Symmetry: The Request Flow
+Every CarrotDB node is **Symmetric**. You can talk to any node, and it will act as a gateway to the entire cluster.
+
+```mermaid
+graph LR
+    Client -->|GET user:1| NodeA[Node A]
+    NodeA -->|Internal Hash| ShardID[Shard 2]
+    NodeA -->|Forward| NodeB[Node B (Shard 2 Leader)]
+    NodeB -->|Read Disk| Value[Value]
+    Value --> NodeA
+    NodeA -->|Response| Client
+```
 
 ---
 
 ## ⚖️ The CAP Theorem
-In distributed systems, you can only pick two: **C**onsistency, **A**vailability, or **P**artition Tolerance.
-*   **CarrotDB is a CP System:** We prioritize **Consistency** and **Partition Tolerance**. During a network split, CarrotDB will stop accepting writes on the minority side to ensure that your data never becomes corrupted or out-of-sync.
+CarrotDB is a **CP System** (Consistency + Partition Tolerance).
+*   During a network split, if a node can't see a majority of the cluster, it will **stop accepting writes**.
+*   **Educational Insight:** Why not stay Available (AP)? Because in a database, having **two different versions of the truth** (Split Brain) is usually worse than being temporarily offline.
 
 ---
 *Ready to dive deeper? Check the code in `internal/engine/`, `internal/server/`, and `pkg/sharding/` to see these concepts in action.*
