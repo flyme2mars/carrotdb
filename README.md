@@ -19,6 +19,7 @@ CarrotDB is an industrial-grade distributed database designed for extreme scalab
 *   **V2 Dashboard:** Professional, minimalist monochromatic UI for real-time cluster monitoring.
 *   **Cluster Topology:** CLI-level insight into shard health and node distribution.
 *   **Trace Mode:** Educational "--trace" flag to visualize the internal request lifecycle across all layers.
+*   **Lab Bench:** Quantitative benchmarking tool to measure and explain distributed system trade-offs.
 *   **Cloud Native:** First-class Docker and Kubernetes support with environment-based configuration.
 
 ---
@@ -69,6 +70,22 @@ CarrotDB is built for learning. Run any node with the `--trace` flag to see the 
 *   **Blue (Router):** How keys are hashed and mapped to shards.
 *   **Cyan (Server/Raft):** When commands are proposed and committed to the cluster.
 *   **Magenta (Engine):** Exactly where and when data is written to the physical append-only log.
+
+---
+
+## 🧪 Educational: Lab Bench
+The **Lab Bench** (`carrotdb-bench`) is a scientific instrument for CarrotDB. It runs standardized workloads and generates an educational report explaining the **"Why"** behind the performance.
+
+### Run an Experiment
+```bash
+# Start a benchmark against a running cluster
+./carrotdb-bench -port 8000 -duration 10s
+```
+
+**It measures and explains:**
+*   **Sharding Impact:** How throughput increases as you add more shards.
+*   **Fan-out Latency:** Why global commands like `KEYS` get slower as the cluster grows.
+*   **Concurrency:** How multiple workers interact with the Raft leader.
 
 ---
 

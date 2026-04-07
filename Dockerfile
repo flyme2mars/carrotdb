@@ -13,9 +13,10 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the server and CLI
+# Build the server, CLI, and bench tool
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /carrotdb-server ./cmd/carrotdb-server/main.go
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /carrotdb ./cmd/carrotdb/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /carrotdb-bench ./cmd/carrotdb-bench/main.go
 
 # Stage 2: Final Image
 FROM alpine:latest
@@ -33,6 +34,7 @@ WORKDIR /home/carrot
 # Copy binaries from builder
 COPY --from=builder /carrotdb-server .
 COPY --from=builder /carrotdb .
+COPY --from=builder /carrotdb-bench .
 
 # Default data directory
 RUN mkdir -p /home/carrot/data
